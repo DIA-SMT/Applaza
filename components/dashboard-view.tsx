@@ -1,0 +1,40 @@
+"use client";
+import dynamic from "next/dynamic";
+import Image from "next/image";
+import { useMemo, useState } from "react";
+import { Building2, Camera, ChevronRight, ClipboardCheck, Clock3, Filter, LayoutDashboard, Map, Menu, Search, Trees, TriangleAlert, UsersRound } from "lucide-react";
+import type { MaintenancePhoto, MaintenanceStatus, Provider, SpaceRecord } from "@/types/domain";
+import { SpaceDetail } from "./space-detail";
+import { StatusBadge, statusColors, statusLabels } from "./status-badge";
+
+const SpaceMap = dynamic(() => import("./space-map"), { ssr: false, loading: () => <div className="map-loading">Cargando mapa…</div> });
+type View = "dashboard" | "map";
+export function DashboardView({ initialSpaces, providers }: { initialSpaces: SpaceRecord[]; providers: Provider[] }) {
+  const [view, setView] = useState<View>("dashboard"); const [spaces, setSpaces] = useState(initialSpaces); const [selectedId, setSelectedId] = useState<string>();
+  const [query, setQuery] = useState(""); const [provider, setProvider] = useState("all"); const [status, setStatus] = useState("all"); const [type, setType] = useState("all");
+  const selected = spaces.find((item) => item.id === selectedId);
+  const filtered = useMemo(() => spaces.filter((space) => (space.name.toLowerCase().includes(query.toLowerCase()) || space.neighborhood.toLowerCase().includes(query.toLowerCase())) && (provider === "all" || space.provider?.id === provider) && (status === "all" || space.status === status) && (type === "all" || space.type === type)), [spaces, query, provider, status, type]);
+  const mappedCount = filtered.filter((space) => space.latitude != null && space.longitude != null).length;
+  const stats = [
+    { label: "Espacios relevados", value: spaces.length, icon: Trees, tone: "blue" },
+    { label: "En curso", value: spaces.filter((s) => s.status === "en_curso").length, icon: Clock3, tone: "cyan" },
+    { label: "Finalizados", value: spaces.filter((s) => s.status === "finalizado").length, icon: ClipboardCheck, tone: "green" },
+    { label: "Vencidos", value: spaces.filter((s) => s.status === "vencido").length, icon: TriangleAlert, tone: "red" },
+    { label: "Proveedores activos", value: providers.filter((p) => p.active).length, icon: UsersRound, tone: "purple" },
+  ];
+  const allPhotos = spaces.flatMap((s) => s.photos.map((photo) => ({ ...photo, spaceName: s.name }))).sort((a, b) => b.created_at.localeCompare(a.created_at));
+  function addPhoto(photo: MaintenancePhoto) { setSpaces((current) => current.map((space) => space.task?.id === photo.maintenance_task_id ? { ...space, photos: [photo, ...space.photos] } : space)); }
+  function openOnMap(space: SpaceRecord) { setSelectedId(space.id); setView("map"); }
+  return <div className="app-shell">
+    <aside className="sidebar"><div className="brand"><div className="brand-mark"><Trees /></div><div><strong>Applaza</strong><span>Gestión de espacios verdes</span></div></div><nav><button className={view === "dashboard" ? "active" : ""} onClick={() => setView("dashboard")}><LayoutDashboard />Resumen</button><button className={view === "map" ? "active" : ""} onClick={() => setView("map")}><Map />Mapa operativo</button></nav><div className="sidebar-foot"><Building2 /><div><strong>Municipalidad de SMT</strong><span>Gestión Ambiental</span></div></div></aside>
+    <main className="main"><header className="topbar"><button className="mobile-menu"><Menu /></button><div><span>San Miguel de Tucumán</span><strong>{view === "dashboard" ? "Panel de control" : "Mapa operativo"}</strong></div><div className="user"><span>LM</span><div><strong>Lucía Medina</strong><small>Administradora</small></div></div></header>
+      {view === "dashboard" ? <div className="content dashboard"><div className="page-heading"><div><p>OPERACIÓN MUNICIPAL</p><h1>Estado general</h1><span>Seguimiento actualizado de espacios verdes y mantenimientos.</span></div><button className="primary" onClick={() => setView("map")}><Map size={17} />Abrir mapa</button></div>
+        <div className="stats-grid">{stats.map(({ label, value, icon: Icon, tone }) => <article className="stat-card" key={label}><div className={`stat-icon ${tone}`}><Icon /></div><div><span>{label}</span><strong>{value}</strong></div></article>)}</div>
+        <div className="dashboard-grid"><section className="card"><div className="card-title"><div><h2>Mantenimientos recientes</h2><p>Situación de las tareas activas</p></div><button onClick={() => setView("map")}>Ver mapa <ChevronRight size={16} /></button></div><div className="task-list">{spaces.slice(0, 6).map((space) => <button key={space.id} onClick={() => openOnMap(space)}><span className="space-dot" style={{ background: statusColors[space.status] }} /><div><strong>{space.name}</strong><small>{space.provider?.name}</small></div><StatusBadge status={space.status} /><ChevronRight size={17} /></button>)}</div></section>
+          <section className="card"><div className="card-title"><div><h2>Últimas evidencias</h2><p>Fotos cargadas recientemente</p></div><Camera size={20} /></div>{allPhotos.length ? <div className="recent-photos">{allPhotos.slice(0, 4).map((photo) => <figure key={photo.id}><Image src={photo.image_url} alt={photo.spaceName} width={320} height={180} unoptimized={photo.image_url.startsWith("blob:")} /><figcaption><strong>{photo.spaceName}</strong><span>{photo.photo_type}</span></figcaption></figure>)}</div> : <p className="empty">No hay evidencias cargadas.</p>}</section></div>
+      </div> : <div className="map-view"><div className="filters"><div className="search"><Search size={18} /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar espacio o barrio…" /></div><div className="select-wrap"><UsersRound size={16} /><select value={provider} onChange={(e) => setProvider(e.target.value)}><option value="all">Todos los proveedores</option>{providers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div><div className="select-wrap"><Filter size={16} /><select value={status} onChange={(e) => setStatus(e.target.value)}><option value="all">Todos los estados</option>{Object.entries(statusLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></div><div className="select-wrap"><Trees size={16} /><select value={type} onChange={(e) => setType(e.target.value)}><option value="all">Todos los tipos</option><option value="plaza">Plaza</option><option value="espacio_verde">Espacio verde</option><option value="platabanda">Platabanda</option></select></div><span className="result-count">{filtered.length} resultados</span></div>
+        <div className="map-stage"><SpaceMap spaces={filtered} selected={selected} onSelect={(space) => setSelectedId(space.id)} /><div className="map-data-note">{mappedCount} de {filtered.length} espacios georreferenciados</div><div className="legend">{(Object.keys(statusLabels) as MaintenanceStatus[]).map((key) => <span key={key}><i style={{ background: statusColors[key] }} />{statusLabels[key]}</span>)}</div>{selected && <SpaceDetail space={selected} onClose={() => setSelectedId(undefined)} onPhoto={addPhoto} />}</div>
+      </div>}
+    </main>
+  </div>;
+}

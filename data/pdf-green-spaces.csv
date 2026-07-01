@@ -1,0 +1,219 @@
+﻿page,section,provider,source_type,name,address,neighborhood,surface_m2,ocr_confidence
+3,1,LOBO,Plaza,Virgen del a Merced(Amalia),Lavaissey Entre Rios,Toledo,6500,0.988
+3,1,LOBO,Plazoleta,Antartida Argentina,Bernabe Araoz1700y Jose Malabia,Sgto Lay,973,0.99
+3,1,LOBO,Plazoleta,Juan Gutemberg,Democraciay Ayacucho,EIGrafico/Diza,3153,0.989
+3,1,LOBO,Plazoleta,Villa Amalia2-Boulevard Magallanes,"Hernandode Magallanes300,entrelas Herasy Congreso",Villa Amalia,1844,0.982
+3,1,LOBO,Plazoleta,Ingreso San Cayetano,Beruttiy Anselmo Rojo,,592,0.986
+3,1,LOBO,Plaza,Juan Pabloll(delarteycultura),Mejico4300-Gregorio V.de Andrade1900,Congreso,8699,0.988
+3,1,LOBO,Plaza,Alberto Garcia Hamilton,Ecuador4200,o'Connors,8903,0.978
+3,1,LOBO,Plaza,Capitan Can dela ria,Suipacha1300,Villa Urquiza,2475,0.981
+3,1,LOBO,Plaza,Francisco Jose Ponssa,Juramentoala Banderay Yamandu Rodriguez,Las Brisas,4916,0.989
+3,1,LOBO,Plaza,Jose Sortheix,"Americo Vespucio1600,esquina Prospero Mena",Juan BTeran,14823,0.987
+3,1,LOBO,Plazoleta,Juan Crisostomo Mendez,Pje.Vega1065y La Rioja,EICruce,900,0.973
+3,1,LOBO,Plazoleta,Dolores Cordoba del a Vega,Saavedra2300,Aguas Corrientes,556,0.986
+3,1,LOBO,Plazoleta,Mario Bravo,Asunci6n1100y Pje.Arenales,EIBosque,1200,0.984
+3,1,LOBO,Plazoleta,Rev.Padre Jose Punta,"Isabella Catlica1800,esquina San Miguel",Gas del estado,1800,0.967
+3,1,LOBO,Plaza,Pujyana,Santiago3200,SITRAVII,3213,0.98
+3,1,LOBO,Plaza,Republicade Bolivia,Av.Matede Lunay Av.America(hasta Pje.Del Prado),Belgrano,1704,0.978
+3,1,LOBO,Plazoleta,SMATAI,Batalla de Boyacay Adolfo Alsina.Detras dela Coca.Son dos plazas,SMATAI,2238,0.979
+3,1,LOBO,Plazoleta,Capitan Medina,Pje.Juan Cruz Varela entre38/51NOy Paso del os Andes.,16de Junio,2292,0.983
+3,1,LOBO,Plazoleta,Sin nombre,Rafael Obligadoy Calle63NO,Telefonico,2800,0.985
+3,1,LOBO,Terraplen,Anselmo Rojo,Anselmo Rojodesde Belisario Lopezhasta Rotondade San Cayetano,,23603,0.991
+3,7,LOBO,Plaza,S/N,Lidoro Quinterosy San Genaro P.U.471,314Viviendas,7136,0.989
+3,7,LOBO,Platabanda,B°130Viviendas,AV.71Noreste Desde Cuba hasta Atahualpa- P.U.1-371-372-374-377-39-40-37-371-PARTE DEL P.U38-(SIN,,3782,0.972
+3,7,LOBO,Acceso,Banda del Rio Sali, PLAZA HEROESDE MALVINAY P.U.375) OBEID,,43300,0.976
+3,2,OBEID,Plaza,Deodora Roco,Pje.Saenz Penia3700,Cooperget,7100,0.984
+3,2,OBEID,Plaza,Don Bosco,"Santiago delestero 1800,esquina Pje.Felix Frias",Don Bosco,14624,0.987
+3,2,OBEID,Plaza,San Expedito(Campora),Ayacucho4100y Araujo,Blasco,9910,0.984
+3,2,OBEID,Plaza,Centenario,Alsinaentre Morenoy Entre Rios,Vvilla Alem,4640,0.961
+3,2,OBEID,Plaza,Leopoldo Marechal,"Alsina,entre Pje.Neuqueny Entre Rios",Villa Alem,3448,0.976
+3,2,OBEID,Plaza,Juana Manso,Eugenio Mendez400,San Cayetano,4176,0.992
+3,2,OBEID,Plaza,M.M.de Guemes,Fortunata Garciay Ayacucho,Eva Peron,8773,0.97
+3,2,OBEID,Plazoleta,Almafuerte,Pasaje Einsteiny La Rioja,Los Andes,3000,0.977
+3,2,OBEID,Plaza,Lozano Munoz,Sargento Cabral2100,Echeverria,9800,0.987
+3,2,OBEID,Ingreso,8*Blasco,PU:44y69 COOP.REMACOOP,,50599,0.957
+3,3,REMACOOP,Plaza,Miguel Campero,Colombia4600,Los Tarcos Ill,7182,0.974
+3,3,REMACOOP,Plaza,Juan Eduardo Tenreyro,Ollerosy Av.Colon2200,Sutiaga,3114,0.979
+3,3,REMACOOP,Plazoleta,Alberto Rouges,O'Higgins1900y Pje.Jose Benito Gonzalez,Los Vasquez,2100,0.986
+3,3,REMACOOP,Boulevard,Italia,Italiaentre Balcarcey25de Mayo,,5854,0.979
+3,3,REMACOOP,Platabanda,Sin nombre,"Av.Belgrano,Caminodel Peru,Viamonte",,1920,0.965
+4,3,REMACOOP,Platabanda,Sin nombre,"Av.Matede Luna,Caminodel Peru,Viamonte",,2000,0.975
+4,3,REMACOOP,Platabanda,Sin nombre,Catamarcaentre Santiagoe Italia,,1560,0.992
+4,3,REMACOOP,Platabanda,Sin nombre,Av.Benjamin Araozentre Circunvalaciony Soldati,,1320,0.984
+4,3,REMACOOP,Platabanda,Sin nombre,Av.Gdor.Del Campoentre Circunvalaciony Soldati,,1320,0.991
+4,3,REMACOOP,Platabanda,Sin nombre,Av.Alemy Av.Mitre desde plazoletamitre hasta magallanes,,7087,0.985
+4,3,REMACOOP,Platabanda,Sin nombre,Av.Sarmientoentre J.B.Justoy Lucas Cordoba,,1560,0.993
+4,3,REMACOOP,Platabanda,Sin nombre,Av.Colectoracanalsur-desdeindependenciahasta Americo Vespucio lado este.,,13673,0.994
+4,3,REMACOOP,Platabanda,Sin nombre,Av.Independenciaentre Alemy Canal Sur,,3500,0.993
+4,3,REMACOOP,Platabanda,Sin nombre,Boulevarddeav.Independenciadesde Geronimo Helguera hasta huemul,,4420,0.992
+4,3,REMACOOP,Platabanda,Sin nombre,Av.Ejercito del norte/Colondesde Fcode Aguirrehasta Americo Vespucio,,12232,0.993
+4,3,REMACOOP,Platabanda,Sin nombre,Alfredo Guzman-Caminodel Peruentre Crisostomoy Belgrano.,,9835.3,0.988
+4,3,REMACOOP,Platabanda,Sin nombre,Juanbjusto/avellaneda/Saenzpenadefcode Aguirre hasta roca,,8695,0.991
+4,3,REMACOOP,Platabanda,Sin nombre,Av.Martinberho desde avjuanbjusto hasta coronel Suarez,,2357.8,0.99
+4,3,REMACOOP,Platabanda,Sin nombre,Democraciaentre Jujuyycircunvalacion,,2840.3,0.989
+4,3,REMACOOP,Platabanda,Sin nombre,Av-Mexicodesde Republicade Libanohasta Av Ejercitodel Norte,,3450.4,0.983
+4,3,REMACOOP,Platabanda,Sin nombre,Av.Papa Franciscodesde Av.Benjamin Araozhasta Rotondade San Cayetano,,7212.4,0.983
+4,3,REMACOOP,Platabanda,Sin nombre,Av.Estadode Israele Italiahasta Rotondadecalle Ecuador(incluida),,1439.1,0.986
+4,3,REMACOOP,Platabanda,Sin nombre,Av.Santiagodel Esterodesde Dr.Alfredo Amenabarhasta Esteban Echeverria,,2331.6,0.987
+4,3,REMACOOP,Parque,Mercedes Sosa,Av.Benjamin Araozy Av.Papa Francisco COOP.PROFETAISAIAS,,25005,0.995
+4,3A,PROFETA ISAIAS,Platabanda,Sin nombre,Pedro Miguel Araozentre Papa Franciscoy Silvano Bores,,612.71,0.985
+4,3A,PROFETA ISAIAS,Platabanda,Sin nombre,Jujuyentre Platay Democracia,,1547.4,0.989
+4,3A,PROFETA ISAIAS,Platabanda,Sin nombre,Av.coronel Suarezdesde Martinberho hasta benjamin Araoz,,2410,0.996
+4,3A,PROFETA ISAIAS,Platabanda,Sin nombre,Av.fcode Aguirre desde juanb.justo hasta camino del peru,,7185,0.984
+4,3A,PROFETA ISAIAS,Platabanda,Sin nombre,Brigidoterandesde24deseptiembrehasta avroca,,3686.2,0.986
+4,3A,PROFETA ISAIAS,Platabanda,Sin nombre,Av.Americo Vespucio desde av Alem hasta canalsur,,2670.7,0.991
+4,3A,PROFETA ISAIAS,Platabanda,Sin nombre,Joseing.Entrepapafranciscoybrigidoteran,,304.71,0.991
+4,3A,PROFETA ISAIAS,Platabanda,Sin nombre,Pedromiguelaraoz entre papafranciscoysaenzpea,,1043.2,0.988
+4,3A,PROFETA ISAIAS,Platabanda,Sin nombre,Av.Coronel Zelaya desde Canalsurhasta Av Manantial,,736.39,0.986
+4,3A,PROFETA ISAIAS,Platabanda,Sin nombre,Av.Rocadesde Plazoleta Dorregohasta Av.Alem,,2052.3,0.985
+4,3A,PROFETA ISAIAS,Platabanda,Sin nombre,Av.Siriadesde Sarmientohasta Acceso Norte,,2557.4,0.986
+4,3A,PROFETA ISAIAS,Platabanda,Sin nombre,Av.Colondesde Americayolleroshasta Av Manantial,,725.54,0.991
+4,3A,PROFETA ISAIAS,Vera Autopista,Sin nombre,351-352-356-358-357-353-354-355-360-361-363-364-365-366-359 CONSTRUTUC,,106460,0.996
+4,4,CONSTRUTUC,Acceso,Norte,ACCESONORTE P.U.97-81-82-83-84-145-35-85-86-74-146.,,84416,0.995
+4,4,CONSTRUTUC,Acceso,Alderetes,ACCESOESTEALDERETE P.U.96-51-50-48-34-33-463-462-45-46-47-95-71-94,,88717,0.988
+4,4A,CONSTRUTUC,Parque,Provincial,Av.Rocaentre Ayacuchoy9de Julio,,52764,0.989
+4,4A,CONSTRUTUC,Vera Autopista,Sin nombre,Av.Circunvalaci6n N*277-276-278-274-279-280 PROYECTARFUTURO,,51006,0.99
+4,5,PROYECTAR FUTURO,Acceso,San Cayetano,SECTORES36-42-65-72-73-88-89-90-91-92-369-388/Noincluyerotondas292y516,,197393,0.994
+4,5A,PROYECTAR FUTURO,Vera Autopista,Sin nombre,SECTORES368-370-498-381-382-383-384-385-386-387-379-380-378-375 COOPERATIVA13DEENERO,,75467,0.994
+4,6,13 DE ENERO,Plazoleta,Cesar Cipolletti,Mejico4300,,2333,0.991
+5,6,13 DE ENERO,Plaza,S/N,Mario Bravoy71NE P.U.271,130Viviendas,4670,0.986
+5,6,13 DE ENERO,Plaza,S/N,71NEentre Coronel Suarezy Lola Mora P.U.272,130Viviendas,9774,0.985
+5,6,13 DE ENERO,Plaza,S/N,Mario Bravoentre73NEy28/23NE P.U.273,130Viviendas,2640,0.982
+5,6,13 DE ENERO,Plazoleta,Maria Auxiliadora,Don Orioney Diagonal90(3triangulos).VERMAPA,,4000,0.981
+5,6,13 DE ENERO,Plaza,Barrancasdel Sali B,C.38NORESTEYC.NOROESTE,B*Barrancasdel Sali,7081,0.98
+5,6,13 DE ENERO,Platabanda,Veradecanal,CANALSUR-TRAMO5DECOLONADIAGONAL-TRAMO6DEDIAGONALACOLON,,29468,0.993
+5,6,13 DE ENERO,Boulevard,BSan Martin,Av.Povina（Ruta provincial301-Caminode Sirga),,3120,0.985
+5,6,13 DE ENERO,Plaza,Almirante Brown,Pje Vieytesy Miguel Lilo1400,Victoria,7850,0.984
+5,6,13 DE ENERO,Plazoleta,Int.Alfredo Guzman,"Juramento del a Bandera1200,esquina Mario Bravo（son2endiagonal）",Parque Centenario,9056,0.976
+5,6,13 DE ENERO,Plazoleta,Int.Carlos Maria Torres,"Juramento del a Bandera1200,esquina Mario Bravo（son2endiagonal）",Parque Centenario,2287,0.965
+5,6,13 DE ENERO,Boulevard,Brasil,Pje.Brasil entre Av.J.B.Justoy Maipu,,12392,0.988
+5,6,13 DE ENERO,Platabanda,Caminode Sirga,SECCIONES435-436-483-484,,22081,0.994
+5,6,13 DE ENERO,Terraplen,Panamay Jose Hernandez,SECCIONES308-309-310,,36786,0.99
+5,6,13 DE ENERO,Plaza,C.de Fragata Pedro E.Giachino,"Av.Juan B.Justo2350,esquina Pje.Roberto Berho",,5391,0.974
+5,6,13 DE ENERO,Plaza,Gral.Lorenzo Vinter,"Espana2900,entre J.L.Nouguesy Pje.Acha",Ampliacion Jardin,1620,0.979
+5,6,13 DE ENERO,Plazoleta,Mons.Miguel de Andrea,Hernando de Magallanes2500,SEOCI,6200,0.981
+5,6,13 DE ENERO,Plazoleta,Paseo Egeo,Inca Garcilasoy Buenos Aires,Egeo,1825,0.989
+5,6,13 DE ENERO,Rotonda,San Miguel Arcangel,Av.Gobernadordel Campoy Circunvalacion,B°Barrancasdel Sali,650,0.976
+5,6,13 DE ENERO,Plazoleta,Gral.Manuel Belgrano,Av.Pedro Miguel Araozal500,B*20de junio,4854,0.956
+5,6,13 DE ENERO,Plazoleta,Dr.F.lrrazabal,Mendoza4450,Alperovich,712,0.984
+5,6,13 DE ENERO,Plaza,S/N,Lidoro Quinteros2500esquina Lopez Maian. PU482,314Viviendas,4519,0.989
+5,6,13 DE ENERO,Plazoleta,Caseros,"Colombia00,esquina Catamarca",Villa Urquiza,2240,0.945
+5,6,13 DE ENERO,Plazoleta,Santisima Trinidad,"Alsina300,entre Congresoy Las Heras COOPERATIVATRABAJOSOFICIO",Villa Alem,3513,0.961
+5,8,TRABAJOS OFICIO,Plazoleta,Wilde,"Suipacha2300,esquinalsabella Catolica",Villa Urquiza,519,0.945
+5,8,TRABAJOS OFICIO,Parquizacion,Dr.Angel Pisarello,Mejicoy Munecas,Los Pinosll,373,0.969
+5,8,TRABAJOS OFICIO,Parque,Monumentoal Alfabeto,Diagonal Lisandro del a Torrey Ramirezde Velazco,Los Pinos,500,0.992
+5,8,TRABAJOS OFICIO,Plazoleta,Tte.B.Matienzo,Diaz Velez800y Luis MDrago50,Padre Monti,611,0.98
+5,8,TRABAJOS OFICIO,Plaza,Sin nombre,Peri3800,Ampliacion Las Americas,8200,0.979
+5,8,TRABAJOS OFICIO,Boulevard,Sin nombre,Mexico YDIAG90LADONORESTE,Congreso,3000,0.987
+5,8,TRABAJOS OFICIO,Plazoleta,Aramburu,Mendoza3300,San Martinde Porres,2900,0.992
+5,8,TRABAJOS OFICIO,Plaza,Dela Libertad,Carlos Maria Torresentre Chacabucoy Bs Aires4400,Independencia,7831,0.985
+5,8,TRABAJOS OFICIO,Plazoleta,Eva Peron,Av.Juan B.Justo1000,,3857,0.989
+5,8,TRABAJOS OFICIO,Plazoleta,Miguelde Azcuenaga,Alsina4600 COOPERATIVASANTAQUIARA,San Martin,3875,0.991
+5,9,SANTAQUIARA,Plaza,ing.Agr.Jose Ploper,Jose M.Estrada4300,Congreso,10502,0.985
+5,9,SANTAQUIARA,Plaza,Diegode Villarroel,Diegode Villarroely Jose Hernandez,Obispo Piedrabuena,1530,0.992
+5,9,SANTAQUIARA,Plaza,Sin nombre,Estados Unidos1500y Calle Costanera Norte,BCostanera(2 de abril),6569,0.907
+5,9,SANTAQUIARA,Plaza,Eva Peron,Espana2700y Azcuenaga,Jardin,7800,0.988
+5,9,SANTAQUIARA,Plazoleta,Dr.Pedro Ruiz Huidobro,Viamonte950-Espanay Av.Estado del srael,Ampliacion Jardin,2854,0.979
+5,9,SANTAQUIARA,Plazoleta,Nicolas Levalle(Petete),Av.Matede Luna3050,San Martinde Porres,1500,0.984
+5,9,SANTAQUIARA,Plazoleta,S/N,General Paz3100. PU:4,,2478,0.988
+5,9,SANTAQUIARA,Plaza,S/N,Don Bosco3200. PU:8,,5614,0.979
+6,9,SANTAQUIARA,Plaza,Alameda del a Victoria,B°Ex Aeropuerto. PU:58,,10848,0.976
+6,9,SANTAQUIARA,Espacio Verde,Vera Autopista,PU:288 COOPERATIVAELINDIO,,14297,0.988
+6,10,EL INDIO,Plazoleta,Jose Padilla,Padre Roque Correa1600,Zenon Santillan,2098,0.976
+6,10,EL INDIO,Plazoleta,Ntra.Sra.del Valle,Italia4300,Oeste I,404,0.968
+6,10,EL INDIO,Plazoleta,Salvador Alberti,"San Lorenzo3900,esquina Pablo Rojas Paz",Ojode Agua,3900,0.985
+6,10,EL INDIO,Plazoleta,Miguel Lillo,Av.Alem250,Ciuda del a,1800,0.988
+6,10,EL INDIO,Plazoleta,Garcia Lorca,Marco Avellaneda1900y Mejico,Villa Urquiza,2000,0.989
+6,10,EL INDIO,Plazoleta,Democracia,Ecuador2900,Casino,2000,0.995
+6,10,EL INDIO,Plaza,BBlasco Il(CGT),Buenos Aires4000,Blascoll,9910,0.966
+6,10,EL INDIO,Plazoleta,S/N,Rene Favaloroy Buenos Aires,Lapacho Sur,1657,0.993
+6,10,EL INDIO,Plazoleta,S/N,Gob.Lazaro Barbieriy 9 de Julio(dos plazas),Lapacho Sur,2051,0.985
+6,10,EL INDIO,Plaza,Ciuda del a,Bolivar esquina Frias Silva,Ciuda del a,5223,0.987
+6,10,EL INDIO,Plaza,S/N,Costa Ricay Jose Hernandez,SITRAVI,4944,0.983
+6,10,EL INDIO,Plazoleta,Leandro Alem,Juan Larreay Buenos Aires,Ampliacion Villa Alem,4128,0.99
+6,10,EL INDIO,Plaza,B*Blasco I(Las Rosas Sur)3,Congres0ypje103/8SE,Blasco,3028,0.97
+6,10,EL INDIO,Plaza,Atahualpa Yupanqui,Mejico4100,Viall,3880,0.954
+6,10,EL INDIO,Rotonda,Sin nombre,Geronimo Helgueray Av Independencia,,5197,0.982
+6,10,EL INDIO,Plazoleta,Sarmiento,Av.Roca y Alberdi,Sur,4800,0.979
+6,10,EL INDIO,Plaza,Barrancasdel Sali A,Diegode Villarroely40noreste,Barrancasdel Sali,5785,0.99
+6,10,EL INDIO,Boulevard,Adolfo del a Vega,Adolfo del a Vega entre(desde M.de Lunahasta Roca) COOPERATIVATRABAIOPORMASFUTURO,,11390,0.987
+6,11,TRABAJO POR MAS FUTURO,Plazoleta,Dr.Cesar Carman,"Catamarca,Emilio Castelar,Lisandro del a Torre",Villa Urquiza,2216,0.974
+6,11,TRABAJO POR MAS FUTURO,Plazoleta,Coop.Guemes,San Lucaseltalia,La Merced,8081,0.982
+6,11,TRABAJO POR MAS FUTURO,Plazoleta,Sargento D.Juarez,Las Piedras3400/3500,Belgrano,1500,0.993
+6,11,TRABAJO POR MAS FUTURO,Plaza,Int.Gregoriode Zavaleta,Pedro Le6n Gallo149-Pje.Agustin Maza150,Belgrano,1718,0.987
+6,11,TRABAJO POR MAS FUTURO,Plazoleta,Jesus del a Divina Misericordia,Crisostomo Alvarez2950,Los Alamos,2322,0.991
+6,11,TRABAJO POR MAS FUTURO,Plazoleta,islas Malvinas,"San Lorenzo2640,esquina Pje.Republica",Floresta,1100,0.985
+6,11,TRABAJO POR MAS FUTURO,Plazoleta,Azopardo,"Gral.Lavalle1800,esquina Frias Silva",Ciuda del a,725,0.989
+6,11,TRABAJO POR MAS FUTURO,Espacio Verde,Sin nombre,"Barrio Pte.Peron. PU:440Calle80/19,desde La Platahasta Av.Independencia",,32001,0.984
+6,11,TRABAJO POR MAS FUTURO,Espacio Verde,Sin nombre,Barrio Pte.Per6n. PU:438Calle80/19SOentre La Platay Calle Sin Nombre COOPERATIVAJUNTOSPARAVIVIRMEJOR,,11690,0.986
+6,12,JUNTOS PARA VIVIR MEJOR,Plaza,Francisco Avignone,Italia3200y Bulnes,B°Mo del o,1415,0.966
+6,12,JUNTOS PARA VIVIR MEJOR,Plazoleta,Reina del a Paz,Diegode Villarroel1700,AGEFT,1749,0.992
+6,12,JUNTOS PARA VIVIR MEJOR,Plazoleta,San Miguel,Benjamin Araoz1200,San Miguel,4200,0.989
+6,12,JUNTOS PARA VIVIR MEJOR,Plazoleta,Dorrego,Av.Rocay Saenz Penia,Ex Aeropuerto,1600,0.983
+6,12,JUNTOS PARA VIVIR MEJOR,Plaza,S/N,"Manuel Alberti2300,entre Ramirezde Velazcoy Pje Chazarreta",,,0.98
+6,12,JUNTOS PARA VIVIR MEJOR,Plaza,Lola Mora,Av.Silvano Bores300y Santa Cruz,Sarmiento,6174,0.992
+6,12,JUNTOS PARA VIVIR MEJOR,Plazoleta,Dr.Jose Lucas Penna,Av.Belgrano 2900,Ampliacion Jardin,2681,0.98
+6,12,JUNTOS PARA VIVIR MEJOR,Plazoleta,Mitre,Av.Belgrano1400,Plazoleta Mitre,330,0.987
+6,12,JUNTOS PARA VIVIR MEJOR,Plaza,GOKU,"Ernesto Padilla340,esquina Pje.Ernesto Colombres",Floresta,2479,0.993
+6,12,JUNTOS PARA VIVIR MEJOR,Plazoleta,Estadosarabes,Av.Kirchner1500,Ciuda del a,1123,0.99
+6,12,JUNTOS PARA VIVIR MEJOR,Plazoleta,Alfredo Rojas Paz,Amado Nervo1800-Pje.Juan Heller1800,Judiciall,1434,0.982
+7,12,JUNTOS PARA VIVIR MEJOR,Plazoleta,Los Lapachos,Chacabuco1900,,800,0.99
+7,12,JUNTOS PARA VIVIR MEJOR,Plaza,Lamadrid,Av.Saenz Penay24deseptiembre/Benjamin Araoz,EIBajo(Terminal Vieja),1297,0.978
+7,12,JUNTOS PARA VIVIR MEJOR,Plazoleta,Rotonda San Cayetano,Av.Papa Franciscoy Antonio Berutti,,3255,0.993
+7,12,JUNTOS PARA VIVIR MEJOR,Boulevard,America,Av.Americadesde Santa Fehasta Diagonal90. PU:520al538,,22429,0.991
+7,12,JUNTOS PARA VIVIR MEJOR,Vera Autopista,TERRAPLEN,COSTADOOESTEde Aut.Circunvalacion PU376 COOPERATIVA THADEM,,8888,0.991
+7,13,THADEM,Parque,Zenon Santillan,Colombia3100,Ampliacion Kennedy,24670,0.975
+7,13,THADEM,Plazoleta,4dejunio,Mendoza3800y Esquiu,Aconquija,1704,0.969
+7,13,THADEM,Plaza,Los Platanos,"Vicente Gallo1400,esquina Pje.Acevedo",Los Platanos,4717,0.982
+7,13,THADEM,Espacio Verde,Espacioverde,PU460 COOPERATIVALOMASDETAFI,8*Fede Villa,22360,0.97
+7,14,LOMAS DE TAFI,Plaza,Int.Roberto Avellaneda,Thamesy Lucio Mansilla250,Ferroviario,1154,0.975
+7,14,LOMAS DE TAFI,Platabanda,Sin nombre,PU-282-283,Autopista,6537,0.966
+7,14,LOMAS DE TAFI,Plaza,Nicomedes Juri,Juan Padrosy Huemul,240Viviendas,6306,0.992
+7,14,LOMAS DE TAFI,Plaza,S/N,Benigno Vallejoentre Virlay Gorritihasta Juan Padros(2espacios/cuadras),Vialll,3409,0.954
+7,14,LOMAS DE TAFI,Plaza,S/N,"Pedro L.Galloentre Juan Padrosy Lopez Manan(esun L,sinlaescuela)",Fede Villa,5962,0.973
+7,14,LOMAS DE TAFI,Plazoleta,S/N,Av.Rocay Primera Junta,Villa Alem,370,0.991
+7,14,LOMAS DE TAFI,Plazoleta,Joaquin Morales Sola,"Diegode Rojas147,alt San Lorenzo3200",Los Alamos,504,0.958
+7,14,LOMAS DE TAFI,Plaza,S/N,Ignacio Gorritiy Pedro Berreta,76Viviendas,5075,0.983
+7,14,LOMAS DE TAFI,Plazoleta,S/N,Lopez Pondaly Benigno Vallejos,Elena White,2831,0.988
+7,14,LOMAS DE TAFI,Plaza,S/N,Av.71 NE-Pje.71/20NE-Pje.22/71NE P.U.270,130Viviendas,4734,0.986
+7,14,LOMAS DE TAFI,Plaza,S/N,Rafael Obligadoy71/20NE P.U.269,130Viviendas,2603,0.99
+7,14,LOMAS DE TAFI,Plaza,S/N,Venezuela200. PU:412 COOPERATIVAAGROPECUARIA,,2491,0.988
+7,15,AGROPECUARIA,Plaza,1°de Mayo,Mendoza2650,Villa Lujan,16575,0.971
+7,15,AGROPECUARIA,Plazoleta,Ing.Domingo Torres,Pueyrredon1000y Alsina,24de Septiembre,1528,0.981
+7,15,AGROPECUARIA,Plazoleta,Dr.William Ernest Cross,Florida2600y Constitucion,Card Samore,2400,0.986
+7,15,AGROPECUARIA,Plaza,Sin nombre,Av.Americo Vespucioy Av.Colon1900,SEOCI,2978,0.983
+7,15,AGROPECUARIA,Platabanda,Sin nombre,PLATABANDAAV.AMERICAYDIAGONAL90HASTARAPELLI,B*FE PUT,3360,0.977
+7,15,AGROPECUARIA,Plaza,Enrique G.Hamilton,Isabel la Catolica600(entre Maipuy Munecas),Los Pinos Il,3987,0.967
+7,15,AGROPECUARIA,Espacio Verde,Sin nombre,"Costadodel BMutual Policial paralelo alcanalsur PU:323325,328",,19276,0.949
+7,15,AGROPECUARIA,Espacioverde,Sin nombre,Av.Papa Fcoentre Jose Ingenieroy PMiguel Araoz-DELCENTROALSUR- P.U.393 COOPERATIVA PRENDATUC,,17826,0.991
+7,16,PRENDA TUC,Plazoleta,Virgendel Rosariode San Nicolas,"Jose Manuel Estrada3800,esquina Fray M.Esquiu",Cooperget Il,2303,0.967
+7,16,PRENDA TUC,Plazoleta,Dr.Pedro Cossio Paz,Jose Frias Araujoy Guido L.Garcia(Altura Espania4300),Ampliacion Padilla,6358,0.978
+7,16,PRENDA TUC,Plaza,25de Mayo,Castro Barrosentre Ecuadory Paraguay,Kennedy,7126,0.992
+7,16,PRENDA TUC,Plazoleta,ATSA,Av.Ejercitode Nortentre Paraguayy Ecuador,,4728,0.972
+7,16,PRENDA TUC,Plaza,ATSA,"Av.Ejercitodel Norte,entre Colombiay Venezuela",,6342,0.99
+7,16,PRENDA TUC,Plaza,ATSAII,Thamesentre Paraguayy Ecuador,,2619,0.989
+7,16,PRENDA TUC,Plaza,S/N,Thamesy Paraguay,,2619,0.992
+7,16,PRENDA TUC,Espacio Verde,Sin nombre,"B*Mutual Provincial. PU:480,481",,13566,0.98
+7,16,PRENDA TUC,Espacio Verde,Sin nombre,"FFCC,desde San Juanhasta Av.Sarmiento,praleloa Marco Avellaneda. PU:315al318",,10584,0.957
+7,16,PRENDA TUC,Espacio Verde,Sin nombre,Av.Papa Fcoentre Jose Ingenieroy PMiguel Araoz-DELCENTROALNORTE- P.U.393,,20011,0.994
+8,17,ARTURO JAURETCHE,Parque,v Centenario,Av.Belgrano4250 COOPERATIVASANTA GUADALUPE,Parque,33507,0.988
+8,18,SANTA GUADALUPE,Plaza,Rene Favaloro,"Bernabe Araoz4000,esquina Rene Favaloro",Parque Sur,10116,0.988
+8,18,SANTA GUADALUPE,Plaza,Las Americas,Federico Helguera1900-Mejico3200,Ampliacion Kennedy,21444,0.99
+8,23,SANTA GUADALUPE,Plaza,B*Policial IV,Fria Silvay Mercedesde Sanmartin- P.U259,B*Policial IV,6493,0.953
+8,23,SANTA GUADALUPE,Terraplen,Alfredo Palacio,Alfredo Palaciosentre Av.Gobernadordel Campoy Av.Martin Berho PU:314,B°COPIAT,22123,0.98
+8,23,SANTA GUADALUPE,Plaza,Juan Manuelde Rosas,Diagonal Padre Montiycalle Luis M.Drago- PU:161 COOPERATIVAELGAUCHO,B*Padre Monti,2707,0.972
+8,19,EL GAUCHO,Plaza,Dr.Mario Molina,"Inca Garcilaso del a Vega,Pje.Alfredo Nobely Sara Carreras",,3337,0.967
+8,19,EL GAUCHO,Plaza,S/N,Colombia4500y E.Echeverria,Farmaceutico,9363,0.992
+8,19,EL GAUCHO,Boulevard,Diagonal90,Diagonal90entre Mejicoy Pje.Tagle,,8658,0.987
+8,19,EL GAUCHO,Plaza,S/N,"sabella Catolica1600,esquina Lucas Cordoba",Los Andes,2270,0.978
+8,19,EL GAUCHO,Plaza,ESPERANZA,,,11445,0.992
+8,22,EL GAUCHO,Boulevard,Nestor Kirchner,Av.Kirchnerentre Av.Alemy Av.Adolfo dela ega.lncluyeplatabandaangosta,,28000,0.985
+8,22,EL GAUCHO,Plaza,Sin nombre,Manuel Estrada4000,Congreso,7193,0.99
+8,22,EL GAUCHO,Centro Autopista,Sin nombre,P.U.284-Km,,3357,0.995
+8,22,EL GAUCHO,Boulevard,Amador Lucero,Amador Lucero/Thamesentre Lavalley San Martin COOPERATIVAAGUAS DEL VALLE TRAMO1DEROCAAINDEPENDENCIA TRAMO2DEINDEPENDENCIAARUTA301,,4153,0.995
+8,20,AGUAS DEL VALLE,Platabanda,CANALSUR, TRAMO3DEINDEPENDENCIAACOLON TRAMO4DECOLONAINDEPENDENCIA COOPERATIVACONSTRUNOR,,32937,0.994
+8,21,CONSTRUNOR,Plaza,Alejandro Heredia,Chile3300,Mo del o,16891,0.989
+8,21,CONSTRUNOR,Plaza,Dupuy(ex Navarro),San Juan4700esquina Martin Rodriguez,Alperovich,1369,0.977
+8,21,CONSTRUNOR,Plazoleta,Cristobal Colon,Diegode Rojasy Domingo Matheu3100,Independenciall,2240,0.987
+8,21,CONSTRUNOR,Plaza,Dr.Ramon Domingo Auad,Pueyrredon2000y Baunany,SEOC200viviendas,4666,0.982
+8,21,CONSTRUNOR,Plazoleta,Heroesde Malvinas,Francia1350y Mario Bravo,El Parque,6400,0.981
