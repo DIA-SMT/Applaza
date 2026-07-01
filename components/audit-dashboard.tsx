@@ -101,7 +101,7 @@ export function AuditDashboard({ spaces, providers, currentUser }: { spaces: Spa
   }
 
   function exportReport() {
-    downloadAuditPdf({ period: periodLabel, report: { ...report, title: `${report.title} - ${reportView.title}`, spacesDetail: reportView.spacesDetail }, currentUser });
+    downloadAuditPdf({ filterTitle: reportView.title, month, period: periodLabel, report: { ...report, spacesDetail: reportView.spacesDetail }, currentUser });
   }
 
   return <div className="content audit-page">
@@ -298,7 +298,8 @@ function buildProviderRow(provider: Provider, assignedSpaces: SpaceRecord[], pro
   const spacesDetail = assignedSpaces.map((space) => {
     const record = recordsBySpace.get(space.id);
     const controls = record ? controlKeys.map((key) => record[key]) : [null, null, null];
-    const dates = record ? [record.control_1_date, record.control_2_date, record.control_3_date].filter(Boolean) as string[] : [];
+    const controlDates = record ? [record.control_1_date, record.control_2_date, record.control_3_date] : [null, null, null];
+    const dates = controlDates.filter(Boolean) as string[];
     return {
       id: space.id,
       name: space.name,
@@ -308,6 +309,8 @@ function buildProviderRow(provider: Provider, assignedSpaces: SpaceRecord[], pro
       isReviewed: controls.some(Boolean),
       hasObservation: controls.some((control) => control === "no"),
       photos: space.photos.length,
+      providerName: space.provider?.name ?? (provider.id === "all" ? "Sin cooperativa" : provider.name),
+      controlDates,
       date: dates.at(-1) ?? record?.updated_at ?? null,
     };
   }).sort((left, right) => Number(right.hasObservation) - Number(left.hasObservation) || Number(!left.isReviewed) - Number(!right.isReviewed) || left.name.localeCompare(right.name));
@@ -362,40 +365,94 @@ function hasAnyControl(record: ControlRecord) {
   return controlKeys.some((key) => record[key] === "si" || record[key] === "no");
 }
 
-function downloadAuditPdf({ period, report, currentUser }: { period: string; report: ProviderRow; currentUser: UserProfile }) {
-  const width = 595;
-  const height = 842;
-  const margin = 42;
-  const lines = [
-    "MUNICIPALIDAD DE SAN MIGUEL DE TUCUMAN",
-    "Informe de auditoria de espacios verdes",
-    `Periodo: ${period}`,
-    `Emitido por: ${currentUser.full_name}`,
-    "",
-    `Cooperativa: ${report.title}`,
-    `Espacios: ${report.spaces}`,
-    `Superficie: ${formatNumber(report.surface)} m2`,
-    `Controlados: ${report.reviewed}`,
-    `Pendientes: ${report.pending}`,
-    `Observaciones: ${report.negative}`,
-    `Evidencias: ${report.photos}`,
-    "",
-    "Detalle",
-    ...report.spacesDetail.map((space) => {
-      const controls = space.controls.map((control) => control ? control.toUpperCase() : "-").join(" / ");
-      return `${space.name} - ${formatNumber(space.surface)} m2 - ${controls} - ${space.date ? formatDate(space.date) : "sin registro"}`;
-    }),
-  ];
+function downloadAuditPdf({ filterTitle, month, period, report, currentUser }: { filterTitle: string; month: string; period: string; report: ProviderRow; currentUser: UserProfile }) {
+  const width = 842;
+  const height = 595;
+  const margin = 36;
+  const { from, to } = periodRange(month);
+  const issuedAt = formatDate(new Date().toISOString());
+  const groups = groupSpacesByProvider(report.spacesDetail);
+  const pages: string[] = [];
+  const pageContents: string[][] = [];
+  let pageIndex = -1;
+  let content: string[] = [];
+  let y = 0;
+
+  function startPage() {
+    pageIndex += 1;
+    content = [];
+    pageContents.push(content);
+    y = height - margin;
+    addPdfRect(content, 0, height - 78, width, 78, "0.02 0.25 0.55");
+    addPdfText(content, "MUNICIPALIDAD DE SAN MIGUEL DE TUCUMAN", margin, height - 32, 9, true, "1 1 1");
+    addPdfText(content, "Informe de auditoria de espacios verdes", margin, height - 52, 17, true, "1 1 1");
+    addPdfText(content, `${period} | ${filterTitle}`, margin, height - 68, 9, false, "0.86 0.93 1");
+    addPdfText(content, `Pagina ${pageIndex + 1}`, width - margin - 48, height - 32, 8, false, "0.86 0.93 1");
+    y = height - 102;
+  }
+
+  function ensureSpace(required: number) {
+    if (y - required < margin) startPage();
+  }
+
+  startPage();
+  addPdfText(content, "Resumen del informe", margin, y, 12, true, "0.06 0.15 0.28");
+  y -= 20;
+  addInfoBox(content, margin, y - 36, 150, "Fecha de exportacion", issuedAt);
+  addInfoBox(content, margin + 158, y - 36, 130, "Desde", from);
+  addInfoBox(content, margin + 296, y - 36, 130, "Hasta", to);
+  addInfoBox(content, margin + 434, y - 36, 170, "Emitido por", currentUser.full_name);
+  addInfoBox(content, margin + 612, y - 36, 158, "Cooperativa", report.title);
+  y -= 56;
+
+  addInfoBox(content, margin, y - 36, 112, "Espacios", report.spaces);
+  addInfoBox(content, margin + 120, y - 36, 112, "Controlados", report.reviewed);
+  addInfoBox(content, margin + 240, y - 36, 112, "Exportados", report.spacesDetail.length);
+  addInfoBox(content, margin + 360, y - 36, 112, "Pendientes", report.pending);
+  addInfoBox(content, margin + 480, y - 36, 112, "Observaciones", report.negative);
+  addInfoBox(content, margin + 600, y - 36, 170, "Superficie", `${formatNumber(report.surface)} m2`);
+  y -= 58;
+
+  addPdfText(content, "Detalle por cooperativa", margin, y, 12, true, "0.06 0.15 0.28");
+  y -= 20;
+
+  if (!groups.length) {
+    addPdfRect(content, margin, y - 40, width - margin * 2, 46, "0.96 0.98 1");
+    addPdfText(content, "No hay registros para el filtro seleccionado.", margin + 12, y - 18, 10, false, "0.37 0.45 0.55");
+  }
+
+  for (const group of groups) {
+    ensureSpace(76);
+    addPdfRect(content, margin, y - 22, width - margin * 2, 24, "0.91 0.96 1");
+    addPdfText(content, group.providerName, margin + 10, y - 14, 10, true, "0.02 0.25 0.55");
+    addPdfText(content, `${group.spaces.length} espacios`, width - margin - 78, y - 14, 8, false, "0.25 0.34 0.45");
+    y -= 34;
+    drawAuditTableHeader(content, y);
+    y -= 18;
+
+    for (const space of group.spaces) {
+      ensureSpace(34);
+      const rowHeight = 24;
+      addPdfRect(content, margin, y - rowHeight + 4, width - margin * 2, rowHeight, space.hasObservation ? "1 0.96 0.96" : space.isReviewed ? "0.96 1 0.97" : "1 0.98 0.94");
+      addPdfText(content, truncate(space.name, 39), margin + 8, y - 10, 8, true, "0.06 0.15 0.28");
+      addPdfText(content, truncate(space.neighborhood || "Sin barrio", 22), margin + 8, y - 20, 7, false, "0.37 0.45 0.55");
+      addPdfText(content, formatNumber(space.surface), margin + 226, y - 13, 8, false, "0.06 0.15 0.28");
+      addPdfText(content, controlText(space.controls[0]), margin + 282, y - 13, 8, true, controlColor(space.controls[0]));
+      addPdfText(content, formatOptionalDate(space.controlDates[0]), margin + 314, y - 13, 8, false, "0.06 0.15 0.28");
+      addPdfText(content, controlText(space.controls[1]), margin + 392, y - 13, 8, true, controlColor(space.controls[1]));
+      addPdfText(content, formatOptionalDate(space.controlDates[1]), margin + 424, y - 13, 8, false, "0.06 0.15 0.28");
+      addPdfText(content, controlText(space.controls[2]), margin + 502, y - 13, 8, true, controlColor(space.controls[2]));
+      addPdfText(content, formatOptionalDate(space.controlDates[2]), margin + 534, y - 13, 8, false, "0.06 0.15 0.28");
+      addPdfText(content, String(space.photos), margin + 742, y - 13, 8, false, "0.06 0.15 0.28");
+      y -= rowHeight + 4;
+    }
+    y -= 8;
+  }
 
   const objects: string[] = [];
-  const pages: string[] = [];
-  const pageCount = Math.max(1, Math.ceil(lines.length / 42));
-  for (let pageIndex = 0; pageIndex < pageCount; pageIndex += 1) {
-    const pageLines = lines.slice(pageIndex * 42, pageIndex * 42 + 42);
-    const content: string[] = ["0.96 0.98 1 rg 0 0 595 842 re f", "0 0 0 rg"];
-    pageLines.forEach((line, index) => addPdfText(content, line, margin, height - margin - index * 17, index < 2 ? 12 : 9, index < 2));
-    const stream = content.join("\n");
-    const pageObject = 5 + pageIndex * 2;
+  for (let index = 0; index < pageContents.length; index += 1) {
+    const stream = pageContents[index].join("\n");
+    const pageObject = 5 + index * 2;
     const contentObject = pageObject + 1;
     pages.push(`${pageObject} 0 R`);
     objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${width} ${height}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${contentObject} 0 R >>`);
@@ -424,17 +481,81 @@ function downloadAuditPdf({ period, report, currentUser }: { period: string; rep
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `informe-auditoria-${pdfText(report.title).replace(/\s+/g, "-").toLowerCase()}-${period.replace(/\s+/g, "-")}.pdf`;
+  link.download = `informe-auditoria-${slug(report.title)}-${month}.pdf`;
   link.click();
   URL.revokeObjectURL(url);
 }
 
-function addPdfText(content: string[], text: string, x: number, y: number, size: number, bold = false) {
-  content.push(`BT /${bold ? "F2" : "F1"} ${size} Tf ${x.toFixed(2)} ${y.toFixed(2)} Td (${pdfText(text)}) Tj ET`);
+function addInfoBox(content: string[], x: number, y: number, width: number, label: string, value: string | number) {
+  addPdfRect(content, x, y, width, 38, "0.96 0.98 1");
+  addPdfText(content, label, x + 8, y + 23, 7, false, "0.37 0.45 0.55");
+  addPdfText(content, truncate(String(value), Math.max(10, Math.floor(width / 7))), x + 8, y + 10, 9, true, "0.06 0.15 0.28");
+}
+
+function drawAuditTableHeader(content: string[], y: number) {
+  addPdfRect(content, 36, y - 16, 770, 18, "0.08 0.18 0.32");
+  addPdfText(content, "Espacio verde", 44, y - 10, 7, true, "1 1 1");
+  addPdfText(content, "m2", 262, y - 10, 7, true, "1 1 1");
+  addPdfText(content, "C1", 318, y - 10, 7, true, "1 1 1");
+  addPdfText(content, "Fecha 1", 350, y - 10, 7, true, "1 1 1");
+  addPdfText(content, "C2", 428, y - 10, 7, true, "1 1 1");
+  addPdfText(content, "Fecha 2", 460, y - 10, 7, true, "1 1 1");
+  addPdfText(content, "C3", 538, y - 10, 7, true, "1 1 1");
+  addPdfText(content, "Fecha 3", 570, y - 10, 7, true, "1 1 1");
+  addPdfText(content, "Fotos", 778, y - 10, 7, true, "1 1 1");
+}
+
+function addPdfText(content: string[], text: string, x: number, y: number, size: number, bold = false, color = "0 0 0") {
+  content.push(`${color} rg BT /${bold ? "F2" : "F1"} ${size} Tf ${x.toFixed(2)} ${y.toFixed(2)} Td (${pdfText(text)}) Tj ET`);
+}
+
+function addPdfRect(content: string[], x: number, y: number, width: number, height: number, color: string) {
+  content.push(`${color} rg ${x.toFixed(2)} ${y.toFixed(2)} ${width.toFixed(2)} ${height.toFixed(2)} re f`);
 }
 
 function pdfText(value: string | number | null | undefined) {
   return String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[()\\]/g, "\\$&");
+}
+
+function controlText(value: ControlValue) {
+  if (value === "si") return "SI";
+  if (value === "no") return "NO";
+  return "-";
+}
+
+function controlColor(value: ControlValue) {
+  if (value === "si") return "0.09 0.50 0.24";
+  if (value === "no") return "0.72 0.11 0.11";
+  return "0.45 0.52 0.60";
+}
+
+function formatOptionalDate(value: string | null) {
+  return value ? formatDate(value) : "-";
+}
+
+function groupSpacesByProvider(spaces: ProviderRow["spacesDetail"]) {
+  const groups = new Map<string, ProviderRow["spacesDetail"]>();
+  for (const space of spaces) {
+    const providerName = space.providerName || "Sin cooperativa";
+    groups.set(providerName, [...(groups.get(providerName) ?? []), space]);
+  }
+  return Array.from(groups.entries()).map(([providerName, groupedSpaces]) => ({ providerName, spaces: groupedSpaces }));
+}
+
+function periodRange(month: string) {
+  const start = new Date(`${month}-01T12:00:00`);
+  const end = new Date(start);
+  end.setMonth(end.getMonth() + 1);
+  end.setDate(0);
+  return { from: formatDate(start.toISOString()), to: formatDate(end.toISOString()) };
+}
+
+function truncate(value: string, maxLength: number) {
+  return value.length > maxLength ? `${value.slice(0, maxLength - 1)}.` : value;
+}
+
+function slug(value: string) {
+  return pdfText(value).replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-|-$/g, "").toLowerCase() || "auditoria";
 }
 
 function currentMonth() {
@@ -447,7 +568,8 @@ function formatMonth(value: string) {
 }
 
 function formatDate(value: string) {
-  return new Intl.DateTimeFormat("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(value));
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(`${value}T12:00:00`) : new Date(value);
+  return new Intl.DateTimeFormat("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" }).format(date);
 }
 
 function formatNumber(value: number) {
