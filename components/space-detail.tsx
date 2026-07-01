@@ -61,7 +61,7 @@ export function SpaceDetail({ space, providers, currentUser, onClose, onPhoto, o
         {expanded && <div className="detail-metadata"><div><small>Identificador</small><strong>{space.id.slice(0, 8)}</strong></div><div><small>Coordenadas</small><strong>{space.latitude != null && space.longitude != null ? `${space.latitude.toFixed(5)}, ${space.longitude.toFixed(5)}` : "Sin ubicación"}</strong></div><div><small>Fuente</small><strong>{space.section_code ? `Padrón · Sección ${space.section_code}` : "Registro operativo"}</strong></div></div>}
         <section><h3>Observaciones</h3><p className="observations">{space.task?.observations || "Sin observaciones registradas."}</p></section>
         <section><div className="section-title"><h3>Evidencias fotográficas</h3><span>{space.photos.length}</span></div>{space.photos.length ? <div className="photo-grid">{space.photos.map((photo) => <figure key={photo.id}><Image src={photo.image_url} alt={`Evidencia ${photo.photo_type}`} width={180} height={120} unoptimized={photo.image_url.startsWith("blob:")} /><figcaption>{photo.photo_type}</figcaption></figure>)}</div> : <p className="empty">Todavía no hay fotos asociadas.</p>}</section>
-        {space.task && <PhotoUpload taskId={space.task.id} onUploaded={onPhoto} />}
+        {space.task && <PhotoUpload taskId={space.task.id} spaceName={space.name} onUploaded={onPhoto} />}
       </>}
     </div>
   </aside>;

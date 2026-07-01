@@ -1,5 +1,6 @@
 -- Ejecutar en SQL Editor después de los esquemas anteriores.
-do $$ begin create type public.user_role as enum ('admin','supervisor','inspector','provider'); exception when duplicate_object then null; end $$;
+do $$ begin create type public.user_role as enum ('admin','supervisor','inspector','provider','auditor'); exception when duplicate_object then null; end $$;
+alter type public.user_role add value if not exists 'auditor';
 
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
