@@ -1,5 +1,5 @@
 -- Ejecutar en SQL Editor después de los esquemas anteriores.
-do $$ begin create type public.user_role as enum ('admin','inspector','provider'); exception when duplicate_object then null; end $$;
+do $$ begin create type public.user_role as enum ('admin','supervisor','inspector','provider'); exception when duplicate_object then null; end $$;
 
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
@@ -38,9 +38,9 @@ create policy "Authenticated read sections" on public.service_sections for selec
 create policy "Authenticated read checks" on public.maintenance_checks for select to authenticated using (true);
 
 drop policy if exists "Staff update locations" on public.green_spaces;
-create policy "Staff update locations" on public.green_spaces for update to authenticated using (public.current_user_role() in ('admin','inspector')) with check (public.current_user_role() in ('admin','inspector'));
+create policy "Staff update locations" on public.green_spaces for update to authenticated using (public.current_user_role() in ('admin','supervisor','inspector')) with check (public.current_user_role() in ('admin','supervisor','inspector'));
 drop policy if exists "Staff manage tasks" on public.maintenance_tasks;
-create policy "Staff manage tasks" on public.maintenance_tasks for all to authenticated using (public.current_user_role() in ('admin','inspector')) with check (public.current_user_role() in ('admin','inspector'));
+create policy "Staff manage tasks" on public.maintenance_tasks for all to authenticated using (public.current_user_role() in ('admin','supervisor','inspector')) with check (public.current_user_role() in ('admin','supervisor','inspector'));
 
 -- Después de crear el primer usuario en Authentication > Users, promoverlo manualmente:
 -- update public.profiles set role='admin', full_name='Nombre Apellido' where id=(select id from auth.users where email='correo@smt.gob.ar');

@@ -2,7 +2,7 @@ export type SpaceType = "plaza" | "espacio_verde" | "platabanda";
 export type MaintenanceStatus = "programado" | "en_curso" | "finalizado" | "vencido" | "incumplido" | "observado";
 export type Fulfilled = "si" | "no" | "pendiente";
 export type PhotoType = "antes" | "durante" | "despues";
-export type UserRole = "admin" | "inspector" | "provider";
+export type UserRole = "admin" | "supervisor" | "inspector" | "provider";
 export interface UserProfile { id: string; full_name: string; role: UserRole; provider_id: string | null; email?: string }
 
 export interface Provider { id: string; name: string; contact_name: string; phone: string; email: string; notes?: string; active: boolean; created_at: string; updated_at: string }
