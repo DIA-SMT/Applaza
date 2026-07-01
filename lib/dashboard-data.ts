@@ -1,16 +1,16 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { providers as mockProviders, spaceRecords as mockSpaces } from "@/lib/mock-data";
 import type { GreenSpace, MaintenancePhoto, MaintenanceTask, Provider, SpaceRecord } from "@/types/domain";
 
 type ServiceSection = { section_code: string; provider_id: string };
 
-export async function getDashboardData(): Promise<{ spaces: SpaceRecord[]; providers: Provider[] }> {
+export async function getDashboardData(authenticatedClient?: SupabaseClient): Promise<{ spaces: SpaceRecord[]; providers: Provider[] }> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !key) return { spaces: mockSpaces, providers: mockProviders };
 
   try {
-    const supabase = createClient(url, key, { auth: { persistSession: false } });
+    const supabase = authenticatedClient ?? createClient(url, key, { auth: { persistSession: false } });
     const [spacesResult, providersResult, tasksResult, photosResult, sectionsResult] = await Promise.all([
       supabase.from("green_spaces").select("*").order("name"),
       supabase.from("providers").select("*").order("name"),

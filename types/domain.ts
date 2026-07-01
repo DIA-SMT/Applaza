@@ -2,6 +2,8 @@ export type SpaceType = "plaza" | "espacio_verde" | "platabanda";
 export type MaintenanceStatus = "programado" | "en_curso" | "finalizado" | "vencido" | "incumplido" | "observado";
 export type Fulfilled = "si" | "no" | "pendiente";
 export type PhotoType = "antes" | "durante" | "despues";
+export type UserRole = "admin" | "inspector" | "provider";
+export interface UserProfile { id: string; full_name: string; role: UserRole; provider_id: string | null; email?: string }
 
 export interface Provider { id: string; name: string; contact_name: string; phone: string; email: string; notes?: string; active: boolean; created_at: string; updated_at: string }
 export interface GreenSpace { id: string; name: string; type: SpaceType; address: string; neighborhood: string; latitude: number | null; longitude: number | null; status: MaintenanceStatus; created_at: string; updated_at: string; source_type?: string | null; surface_m2?: number | null; section_code?: string | null }
