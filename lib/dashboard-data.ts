@@ -1,13 +1,12 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { providers as mockProviders, spaceRecords as mockSpaces } from "@/lib/mock-data";
 import type { GreenSpace, MaintenancePhoto, MaintenanceTask, Provider, SpaceRecord } from "@/types/domain";
 
 type ServiceSection = { section_code: string; provider_id: string };
 
-export async function getDashboardData(authenticatedClient?: SupabaseClient): Promise<{ spaces: SpaceRecord[]; providers: Provider[] }> {
+export async function getDashboardData(authenticatedClient?: SupabaseClient): Promise<{ spaces: SpaceRecord[]; providers: Provider[]; error: string | null }> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !key) return { spaces: mockSpaces, providers: mockProviders };
+  if (!url || !key) return { spaces: [], providers: [], error: "Supabase no está configurado." };
 
   try {
     const supabase = authenticatedClient ?? createClient(url, key, { auth: { persistSession: false } });
@@ -33,11 +32,11 @@ export async function getDashboardData(authenticatedClient?: SupabaseClient): Pr
     const spaces: SpaceRecord[] = ((spacesResult.data ?? []) as GreenSpace[]).map((space) => {
       const task = latestTaskBySpace.get(space.id);
       const provider = task ? providerById.get(task.provider_id) : space.section_code ? providerBySection.get(space.section_code) : undefined;
-      return { ...space, task, provider, photos: task ? photos.filter((photo) => photo.maintenance_task_id === task.id) : [] };
+      return { ...space, status: task?.status ?? space.status, task, provider, photos: task ? photos.filter((photo) => photo.maintenance_task_id === task.id) : [] };
     });
-    return { spaces, providers };
+    return { spaces, providers, error: null };
   } catch (error) {
-    console.error("Supabase dashboard fallback:", error);
-    return { spaces: mockSpaces, providers: mockProviders };
+    console.error("Supabase dashboard error:", error);
+    return { spaces: [], providers: [], error: "No se pudieron cargar los datos operativos desde Supabase." };
   }
 }

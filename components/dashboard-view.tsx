@@ -1,49 +1,51 @@
 "use client";
-import dynamic from "next/dynamic";
+
 import Image from "next/image";
-import { useMemo, useState } from "react";
-import { Building2, Camera, ChevronRight, ClipboardCheck, Clock3, Crosshair, Filter, LayoutDashboard, LogOut, Map, Menu, Search, Trees, TriangleAlert, UsersRound } from "lucide-react";
-import type { MaintenancePhoto, MaintenanceStatus, Provider, SpaceRecord, UserProfile } from "@/types/domain";
-import { SpaceDetail } from "./space-detail";
-import { StatusBadge, statusColors, statusLabels } from "./status-badge";
-import { LocationEditor } from "./location-editor";
+import { useState } from "react";
+import { Building2, Camera, ChevronRight, ClipboardCheck, Clock3, LayoutDashboard, LogOut, Map, Menu, Trees, TriangleAlert, UsersRound } from "lucide-react";
+import type { Provider, SpaceRecord, UserProfile } from "@/types/domain";
+import { statusColors } from "./status-badge";
+import { OperationalMap } from "./operational-map";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
 
-const SpaceMap = dynamic(() => import("./space-map"), { ssr: false, loading: () => <div className="map-loading">Cargando mapa…</div> });
 type View = "dashboard" | "map";
-export function DashboardView({ initialSpaces, providers, currentUser }: { initialSpaces: SpaceRecord[]; providers: Provider[]; currentUser: UserProfile }) {
-  const [view, setView] = useState<View>("dashboard"); const [spaces, setSpaces] = useState(initialSpaces); const [selectedId, setSelectedId] = useState<string>();
-  const [query, setQuery] = useState(""); const [provider, setProvider] = useState("all"); const [status, setStatus] = useState("all"); const [type, setType] = useState("all");
-  const [locationMode, setLocationMode] = useState(false); const [pendingIndex, setPendingIndex] = useState(0); const [draftLocation, setDraftLocation] = useState<{ latitude: number; longitude: number }>(); const [locationBusy, setLocationBusy] = useState(false); const [locationError, setLocationError] = useState("");
-  const selected = spaces.find((item) => item.id === selectedId);
-  const filtered = useMemo(() => spaces.filter((space) => (space.name.toLowerCase().includes(query.toLowerCase()) || space.neighborhood.toLowerCase().includes(query.toLowerCase())) && (provider === "all" || space.provider?.id === provider) && (status === "all" || space.status === status) && (type === "all" || space.type === type)), [spaces, query, provider, status, type]);
-  const mappedCount = filtered.filter((space) => space.latitude != null && space.longitude != null).length;
-  const pendingSpaces = spaces.filter((space) => space.latitude == null || space.longitude == null);
-  const pendingSpace = pendingSpaces[Math.min(pendingIndex, Math.max(0, pendingSpaces.length - 1))];
-  const canEditLocations = currentUser.role === "admin" || currentUser.role === "inspector";
+
+export function DashboardView({ initialSpaces, providers, currentUser, dataError }: { initialSpaces: SpaceRecord[]; providers: Provider[]; currentUser: UserProfile; dataError: string | null }) {
+  const [view, setView] = useState<View>("dashboard");
+  const [spaces, setSpaces] = useState(initialSpaces);
   const stats = [
     { label: "Espacios relevados", value: spaces.length, icon: Trees, tone: "blue" },
-    { label: "En curso", value: spaces.filter((s) => s.status === "en_curso").length, icon: Clock3, tone: "cyan" },
-    { label: "Finalizados", value: spaces.filter((s) => s.status === "finalizado").length, icon: ClipboardCheck, tone: "green" },
-    { label: "Vencidos", value: spaces.filter((s) => s.status === "vencido").length, icon: TriangleAlert, tone: "red" },
-    { label: "Proveedores activos", value: providers.filter((p) => p.active).length, icon: UsersRound, tone: "purple" },
+    { label: "En curso", value: spaces.filter((space) => space.status === "en_curso").length, icon: Clock3, tone: "cyan" },
+    { label: "Finalizados", value: spaces.filter((space) => space.status === "finalizado").length, icon: ClipboardCheck, tone: "green" },
+    { label: "Vencidos", value: spaces.filter((space) => space.status === "vencido").length, icon: TriangleAlert, tone: "red" },
+    { label: "Proveedores activos", value: providers.filter((provider) => provider.active).length, icon: UsersRound, tone: "purple" },
   ];
-  const allPhotos = spaces.flatMap((s) => s.photos.map((photo) => ({ ...photo, spaceName: s.name }))).sort((a, b) => b.created_at.localeCompare(a.created_at));
-  function addPhoto(photo: MaintenancePhoto) { setSpaces((current) => current.map((space) => space.task?.id === photo.maintenance_task_id ? { ...space, photos: [photo, ...space.photos] } : space)); }
-  function openOnMap(space: SpaceRecord) { setSelectedId(space.id); setView("map"); }
-  function movePending(direction: number) { if (!pendingSpaces.length) return; setPendingIndex((current) => (current + direction + pendingSpaces.length) % pendingSpaces.length); setDraftLocation(undefined); setLocationError(""); }
-  async function saveLocation() { if (!pendingSpace || !draftLocation) return; setLocationBusy(true); setLocationError(""); const supabase = getSupabaseBrowserClient(); if (!supabase) { setLocationError("Supabase no está configurado."); setLocationBusy(false); return; } const { error } = await supabase.from("green_spaces").update({ latitude: draftLocation.latitude, longitude: draftLocation.longitude, geocoding_source: "Manual Applaza", geocoded_at: new Date().toISOString() }).eq("id", pendingSpace.id); if (error) { setLocationError(error.message); setLocationBusy(false); return; } setSpaces((current) => current.map((space) => space.id === pendingSpace.id ? { ...space, ...draftLocation } : space)); setDraftLocation(undefined); setLocationBusy(false); }
+  const latestPhotos = spaces.flatMap((space) => space.photos.map((photo) => ({ ...photo, spaceName: space.name }))).sort((left, right) => right.created_at.localeCompare(left.created_at));
+
   async function signOut() { await getSupabaseBrowserClient()?.auth.signOut(); window.location.href = "/login"; }
+
   return <div className="app-shell">
-    <aside className="sidebar"><div className="brand"><div className="brand-mark"><Trees /></div><div><strong>Applaza</strong><span>Gestión de espacios verdes</span></div></div><nav><button className={view === "dashboard" ? "active" : ""} onClick={() => setView("dashboard")}><LayoutDashboard />Resumen</button><button className={view === "map" ? "active" : ""} onClick={() => setView("map")}><Map />Mapa operativo</button></nav><div className="sidebar-foot"><Building2 /><div><strong>Municipalidad de SMT</strong><span>Gestión Ambiental</span></div></div></aside>
-    <main className="main"><header className="topbar"><button className="mobile-menu"><Menu /></button><div><span>San Miguel de Tucumán</span><strong>{view === "dashboard" ? "Panel de control" : "Mapa operativo"}</strong></div><div className="user"><span>{currentUser.full_name.slice(0, 2).toUpperCase()}</span><div><strong>{currentUser.full_name}</strong><small>{currentUser.role === "admin" ? "Administración" : currentUser.role === "inspector" ? "Inspección" : "Proveedor"}</small></div><button className="logout-button" onClick={signOut} title="Cerrar sesión"><LogOut size={17} /></button></div></header>
-      {view === "dashboard" ? <div className="content dashboard"><div className="page-heading"><div><p>OPERACIÓN MUNICIPAL</p><h1>Estado general</h1><span>Seguimiento actualizado de espacios verdes y mantenimientos.</span></div><button className="primary" onClick={() => setView("map")}><Map size={17} />Abrir mapa</button></div>
-        <div className="stats-grid">{stats.map(({ label, value, icon: Icon, tone }) => <article className="stat-card" key={label}><div className={`stat-icon ${tone}`}><Icon /></div><div><span>{label}</span><strong>{value}</strong></div></article>)}</div>
-        <div className="dashboard-grid"><section className="card"><div className="card-title"><div><h2>Mantenimientos recientes</h2><p>Situación de las tareas activas</p></div><button onClick={() => setView("map")}>Ver mapa <ChevronRight size={16} /></button></div><div className="task-list">{spaces.slice(0, 6).map((space) => <button key={space.id} onClick={() => openOnMap(space)}><span className="space-dot" style={{ background: statusColors[space.status] }} /><div><strong>{space.name}</strong><small>{space.provider?.name}</small></div><StatusBadge status={space.status} /><ChevronRight size={17} /></button>)}</div></section>
-          <section className="card"><div className="card-title"><div><h2>Últimas evidencias</h2><p>Fotos cargadas recientemente</p></div><Camera size={20} /></div>{allPhotos.length ? <div className="recent-photos">{allPhotos.slice(0, 4).map((photo) => <figure key={photo.id}><Image src={photo.image_url} alt={photo.spaceName} width={320} height={180} unoptimized={photo.image_url.startsWith("blob:")} /><figcaption><strong>{photo.spaceName}</strong><span>{photo.photo_type}</span></figcaption></figure>)}</div> : <p className="empty">No hay evidencias cargadas.</p>}</section></div>
-      </div> : <div className="map-view"><div className="filters"><div className="search"><Search size={18} /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar espacio o barrio…" /></div><div className="select-wrap"><UsersRound size={16} /><select value={provider} onChange={(e) => setProvider(e.target.value)}><option value="all">Todos los proveedores</option>{providers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div><div className="select-wrap"><Filter size={16} /><select value={status} onChange={(e) => setStatus(e.target.value)}><option value="all">Todos los estados</option>{Object.entries(statusLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></div><div className="select-wrap"><Trees size={16} /><select value={type} onChange={(e) => setType(e.target.value)}><option value="all">Todos los tipos</option><option value="plaza">Plaza</option><option value="espacio_verde">Espacio verde</option><option value="platabanda">Platabanda</option></select></div>{canEditLocations && <button className={`location-mode-button ${locationMode ? "active" : ""}`} onClick={() => { setLocationMode((value) => !value); setSelectedId(undefined); setDraftLocation(undefined); }}><Crosshair size={16} />{locationMode ? "Salir del editor" : `Ubicar pendientes (${pendingSpaces.length})`}</button>}<span className="result-count">{filtered.length} resultados</span></div>
-        <div className={`map-stage ${locationMode ? "picking-location" : ""}`}><SpaceMap spaces={filtered} selected={selected} onSelect={(space) => !locationMode && setSelectedId(space.id)} locationMode={locationMode} draftLocation={draftLocation} onLocationPick={(latitude, longitude) => setDraftLocation({ latitude, longitude })} /><div className="map-data-note">{mappedCount} de {filtered.length} espacios georreferenciados</div><div className="legend">{(Object.keys(statusLabels) as MaintenanceStatus[]).map((key) => <span key={key}><i style={{ background: statusColors[key] }} />{statusLabels[key]}</span>)}</div>{locationMode && pendingSpace ? <LocationEditor space={pendingSpace} index={pendingIndex} total={pendingSpaces.length} draft={draftLocation} busy={locationBusy} error={locationError} onPrevious={() => movePending(-1)} onNext={() => movePending(1)} onSave={saveLocation} onClose={() => setLocationMode(false)} /> : selected && <SpaceDetail space={selected} onClose={() => setSelectedId(undefined)} onPhoto={addPhoto} />}</div>
-      </div>}
+    <aside className="sidebar">
+      <div className="brand"><div className="brand-mark"><Image src="/logo-municipal.png" alt="Municipalidad de San Miguel de Tucumán" width={42} height={42} priority /></div><div><strong>Applaza</strong><span>Gestión de espacios verdes</span></div></div>
+      <nav><button className={view === "dashboard" ? "active" : ""} onClick={() => setView("dashboard")}><LayoutDashboard />Resumen</button><button className={view === "map" ? "active" : ""} onClick={() => setView("map")}><Map />Mapa operativo</button></nav>
+      <div className="sidebar-foot"><Building2 /><div><strong>Municipalidad de SMT</strong><span>Gestión Ambiental</span></div></div>
+    </aside>
+    <main className="main">
+      <header className="topbar"><button className="mobile-menu"><Menu /></button><div><span>San Miguel de Tucumán</span><strong>{view === "dashboard" ? "Panel de control" : "Mapa operativo"}</strong></div><div className="user"><span>{currentUser.full_name.slice(0, 2).toUpperCase()}</span><div><strong>{currentUser.full_name}</strong><small>{currentUser.role === "admin" ? "Administración" : currentUser.role === "inspector" ? "Inspección" : "Proveedor"}</small></div><button className="logout-button" onClick={signOut} title="Cerrar sesión"><LogOut size={17} /></button></div></header>
+      {view === "map" ? <OperationalMap spaces={spaces} providers={providers} currentUser={currentUser} dataError={dataError} setSpaces={setSpaces} /> : <Dashboard spaces={spaces} providers={providers} stats={stats} latestPhotos={latestPhotos} dataError={dataError} onOpenMap={() => setView("map")} />}
     </main>
+  </div>;
+}
+
+function Dashboard({ spaces, stats, latestPhotos, dataError, onOpenMap }: { spaces: SpaceRecord[]; providers: Provider[]; stats: Array<{ label: string; value: number; icon: typeof Trees; tone: string }>; latestPhotos: Array<{ id: string; image_url: string; photo_type: string; spaceName: string }>; dataError: string | null; onOpenMap: () => void }) {
+  const recentTasks = spaces.filter((space) => space.task).slice(0, 6);
+  return <div className="content dashboard">
+    <div className="page-heading"><div><p>OPERACIÓN MUNICIPAL</p><h1>Estado general</h1><span>Seguimiento actualizado de espacios verdes y mantenimientos.</span></div><button className="primary" onClick={onOpenMap}><Map size={17} />Abrir mapa</button></div>
+    {dataError && <div className="dashboard-error"><TriangleAlert size={18} /><div><strong>No se pudieron actualizar los datos</strong><span>{dataError}</span></div></div>}
+    <div className="stats-grid">{stats.map(({ label, value, icon: Icon, tone }) => <article className="stat-card" key={label}><div className={`stat-icon ${tone}`}><Icon /></div><div><span>{label}</span><strong>{value}</strong></div></article>)}</div>
+    <div className="dashboard-grid">
+      <section className="card"><div className="card-title"><div><h2>Mantenimientos recientes</h2><p>Situación de las tareas activas</p></div><button onClick={onOpenMap}>Ver mapa <ChevronRight size={16} /></button></div>{recentTasks.length ? <div className="task-list">{recentTasks.map((space) => <button key={space.id} onClick={onOpenMap}><span className="space-dot" style={{ background: statusColors[space.status] }} /><div><strong>{space.name}</strong><small>{space.provider?.name || "Sin proveedor asignado"}</small></div><span className={`status status-${space.status}`}>{space.status.replace("_", " ")}</span><ChevronRight size={17} /></button>)}</div> : <p className="dashboard-empty">No hay mantenimientos activos.</p>}</section>
+      <section className="card"><div className="card-title"><div><h2>Últimas evidencias</h2><p>Fotos cargadas recientemente</p></div><Camera size={20} /></div>{latestPhotos.length ? <div className="recent-photos">{latestPhotos.slice(0, 4).map((photo) => <figure key={photo.id}><Image src={photo.image_url} alt={photo.spaceName} width={320} height={180} unoptimized={photo.image_url.startsWith("blob:")} /><figcaption><strong>{photo.spaceName}</strong><span>{photo.photo_type}</span></figcaption></figure>)}</div> : <p className="dashboard-empty">No hay fotos cargadas.</p>}</section>
+    </div>
   </div>;
 }
