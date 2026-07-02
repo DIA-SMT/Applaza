@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { CalendarDays, Check, ClipboardCheck, FileDown, LoaderCircle, Save, Search, X } from "lucide-react";
-import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase";
+import { getSupabaseBrowserClient } from "@/lib/supabase";
 import type { Provider, SpaceRecord } from "@/types/domain";
 
 type ControlKey = "control_1" | "control_2" | "control_3";
@@ -198,7 +198,10 @@ export function ControlRegister({ providers, spaces }: { providers: Provider[]; 
       setRows({});
       if (!providerId || !period) return;
       const client = getSupabaseBrowserClient();
-      if (!client) return;
+      if (!client) {
+        setMessage("Supabase no esta configurado. No se pueden recuperar registros.");
+        return;
+      }
 
       setLoadingRecords(true);
       try {
@@ -254,11 +257,7 @@ export function ControlRegister({ providers, spaces }: { providers: Provider[]; 
 
     try {
       const client = getSupabaseBrowserClient();
-      if (!client) {
-        setMessage("Registro preparado en modo demo. Configure Supabase para persistirlo.");
-        setSaveState("success");
-        return;
-      }
+      if (!client) throw new Error("Supabase no esta configurado. No se puede guardar el registro.");
 
       const { data: { user } } = await client.auth.getUser();
       if (!user) throw new Error("Inicia sesion para guardar el registro.");
@@ -354,7 +353,7 @@ export function ControlRegister({ providers, spaces }: { providers: Provider[]; 
               </tr>;
             })}
           </tbody>
-          <tfoot><tr><td>Total</td><td>{Math.round(totalSurface).toLocaleString("es-AR")}</td><td colSpan={9}>{isSupabaseConfigured ? "Los registros se guardan en Supabase." : "Modo demo sin persistencia."}</td></tr></tfoot>
+          <tfoot><tr><td>Total</td><td>{Math.round(totalSurface).toLocaleString("es-AR")}</td><td colSpan={9}>Los registros se guardan en Supabase.</td></tr></tfoot>
         </table>
       </div>
 

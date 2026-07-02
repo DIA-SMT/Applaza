@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { AlertCircle, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Download, FileSearch, ListFilter, ShieldCheck, TriangleAlert } from "lucide-react";
+import { AlertCircle, CalendarDays, Camera, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Download, FileSearch, ListFilter, LoaderCircle, MessageSquarePlus, ShieldCheck, TriangleAlert } from "lucide-react";
 import type { Provider, SpaceRecord, UserProfile } from "@/types/domain";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
+import { photoTypeLabel } from "@/lib/photo-label";
 
 type ControlValue = "si" | "no" | null;
 type ControlRecord = {
@@ -22,7 +23,15 @@ type ControlRecord = {
 };
 type MetricKey = "assigned" | "reviewed" | "observed" | "evidence";
 type ProviderRow = ReturnType<typeof buildAudit>["providerRows"][number];
-
+type AuditObservation = {
+  id: string;
+  green_space_id: string;
+  provider_id: string | null;
+  period_month: string;
+  observation: string;
+  created_by: string | null;
+  created_at: string;
+};
 const controlKeys = ["control_1", "control_2", "control_3"] as const;
 
 export function AuditDashboard({ spaces, providers, currentUser }: { spaces: SpaceRecord[]; providers: Provider[]; currentUser: UserProfile }) {
@@ -32,6 +41,10 @@ export function AuditDashboard({ spaces, providers, currentUser }: { spaces: Spa
   const [error, setError] = useState<string | null>(null);
   const [selectedProviderId, setSelectedProviderId] = useState<string>("all");
   const [activeMetric, setActiveMetric] = useState<MetricKey>("assigned");
+  const [exporting, setExporting] = useState(false);
+  const [observations, setObservations] = useState<AuditObservation[]>([]);
+  const [observationsError, setObservationsError] = useState<string | null>(null);
+  const [selectedEvidenceSpaceId, setSelectedEvidenceSpaceId] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -69,11 +82,57 @@ export function AuditDashboard({ spaces, providers, currentUser }: { spaces: Spa
     };
   }, [month]);
 
-  const audit = useMemo(() => buildAudit(spaces, providers, records), [spaces, providers, records]);
+  useEffect(() => {
+    let active = true;
+
+    async function loadObservations() {
+      setObservationsError(null);
+      const supabase = getSupabaseBrowserClient();
+      if (!supabase) return;
+
+      const { data, error: queryError } = await supabase
+        .from("audit_observations")
+        .select("*")
+        .eq("period_month", `${month}-01`)
+        .order("created_at", { ascending: false });
+
+      if (!active) return;
+      if (queryError) {
+        setObservations([]);
+        setObservationsError("Para ver observaciones ejecuta el SQL de audit_observations.");
+      } else {
+        setObservations((data ?? []) as AuditObservation[]);
+      }
+    }
+
+    loadObservations();
+    return () => {
+      active = false;
+    };
+  }, [month]);
+
+  const audit = useMemo(() => buildAudit(spaces, providers, records, month), [spaces, providers, records, month]);
   const selectedRow = audit.providerRows.find((row) => row.provider.id === selectedProviderId);
   const report = selectedRow ?? audit.totalRow;
   const reportView = useMemo(() => buildReportView(report, activeMetric), [report, activeMetric]);
+  const observationItems = useMemo(() => observations
+    .map((observation) => ({ ...observation, space: spaces.find((space) => space.id === observation.green_space_id) }))
+    .filter((observation) => selectedProviderId === "all" || observation.space?.provider?.id === selectedProviderId), [observations, selectedProviderId, spaces]);
+  const recentEvidence = useMemo(() => spaces
+    .filter((space) => selectedProviderId === "all" || space.provider?.id === selectedProviderId)
+    .flatMap((space) => space.photos.filter((photo) => isInMonth(photo.created_at, month)).map((photo) => ({
+      ...photo,
+      spaceName: space.name,
+      providerName: space.provider?.name ?? "Sin cooperativa",
+      neighborhood: space.neighborhood || "Sin barrio",
+    })))
+    .sort((left, right) => right.created_at.localeCompare(left.created_at)), [spaces, selectedProviderId, month]);
+  const commandSummary = activeMetric === "observed" ? `${observationItems.length} observaciones cargadas por supervision` : reportView.summary;
   const periodLabel = formatMonth(month);
+
+  useEffect(() => {
+    setSelectedEvidenceSpaceId("");
+  }, [month, selectedProviderId, activeMetric]);
 
   function changeMonth(direction: -1 | 1) {
     const date = new Date(`${month}-01T12:00:00`);
@@ -87,21 +146,25 @@ export function AuditDashboard({ spaces, providers, currentUser }: { spaces: Spa
       setSelectedProviderId("all");
     }
     if (metric === "observed") {
-      const firstObserved = audit.providerRows.find((row) => row.negative > 0);
-      if (firstObserved) setSelectedProviderId(firstObserved.provider.id);
+      setSelectedProviderId("all");
     }
     if (metric === "reviewed") {
       const firstReviewed = audit.providerRows.find((row) => row.reviewed > 0);
       if (firstReviewed) setSelectedProviderId(firstReviewed.provider.id);
     }
-    if (metric === "evidence") {
-      const firstWithEvidence = audit.providerRows.find((row) => row.photos > 0);
-      if (firstWithEvidence) setSelectedProviderId(firstWithEvidence.provider.id);
-    }
   }
 
-  function exportReport() {
-    downloadAuditPdf({ filterTitle: reportView.title, month, period: periodLabel, report: { ...report, spacesDetail: reportView.spacesDetail }, currentUser });
+  async function exportReport() {
+    setExporting(true);
+    try {
+      if (activeMetric === "evidence") {
+        await downloadEvidenceBookPdf({ month, period: periodLabel, report: { ...report, spacesDetail: reportView.spacesDetail }, currentUser });
+      } else {
+        downloadAuditPdf({ filterTitle: reportView.title, month, period: periodLabel, report: { ...report, spacesDetail: reportView.spacesDetail }, currentUser });
+      }
+    } finally {
+      setExporting(false);
+    }
   }
 
   return <div className="content audit-page">
@@ -126,7 +189,7 @@ export function AuditDashboard({ spaces, providers, currentUser }: { spaces: Spa
     <div className="audit-stat-grid">
       <AuditStat active={activeMetric === "assigned"} onClick={() => selectMetric("assigned")} icon={ClipboardList} label="Espacios asignados" value={audit.totalRow.spaces} note={`${audit.providersWithSpaces} cooperativas`} />
       <AuditStat active={activeMetric === "reviewed"} onClick={() => selectMetric("reviewed")} icon={CheckCircle2} label="Espacios controlados" value={audit.totalRow.reviewed} note={`${audit.coverage}% de cobertura`} />
-      <AuditStat active={activeMetric === "observed"} onClick={() => selectMetric("observed")} icon={AlertCircle} label="Observaciones" value={audit.totalRow.negative} note="Controles marcados como NO" tone="warning" />
+      <AuditStat active={activeMetric === "observed"} onClick={() => selectMetric("observed")} icon={AlertCircle} label="Observaciones" value={observations.length} note="Notas de supervision" tone="warning" />
       <AuditStat active={activeMetric === "evidence"} onClick={() => selectMetric("evidence")} icon={FileSearch} label="Evidencias cargadas" value={audit.totalRow.photos} note={audit.latestPhoto ? `Ultima: ${formatDate(audit.latestPhoto)}` : "Sin fotos recientes"} />
     </div>
 
@@ -140,10 +203,10 @@ export function AuditDashboard({ spaces, providers, currentUser }: { spaces: Spa
       </div>
       <div className="audit-command-summary">
         <strong>{report.title}</strong>
-        <span>{periodLabel} - {loading ? "actualizando" : reportView.summary}</span>
+        <span>{periodLabel} - {loading ? "actualizando" : commandSummary}</span>
       </div>
-      <button className="audit-export" onClick={exportReport} disabled={!report.spaces}>
-        <Download size={17} />Exportar PDF
+      <button className="audit-export" onClick={exportReport} disabled={!report.spaces || exporting}>
+        {exporting ? <LoaderCircle className="spin" size={17} /> : <Download size={17} />}{activeMetric === "evidence" ? "Exportar book" : "Exportar PDF"}
       </button>
     </section>
 
@@ -152,7 +215,7 @@ export function AuditDashboard({ spaces, providers, currentUser }: { spaces: Spa
         <div className="audit-panel-title">
           <div>
             <h2>Informe</h2>
-            <p>{reportView.title} - {selectedProviderId === "all" ? "Resumen general del periodo" : "Detalle de la cooperativa seleccionada"}</p>
+            <p>{activeMetric === "observed" ? "Observaciones operativas" : reportView.title} - {selectedProviderId === "all" ? "Resumen general del periodo" : "Detalle de la cooperativa seleccionada"}</p>
           </div>
           <span className="audit-readonly"><ShieldCheck size={15} />Solo lectura</span>
         </div>
@@ -167,19 +230,25 @@ export function AuditDashboard({ spaces, providers, currentUser }: { spaces: Spa
             <span><b>{report.photos}</b> evidencias</span>
           </div>
 
-          <div className="audit-space-list">
-            {reportView.spacesDetail.map((space) => <article key={space.id} className={space.hasObservation ? "observed" : space.isReviewed ? "ready" : "pending"}>
-              <div>
-                <strong>{space.name}</strong>
-                <span>{space.neighborhood || "Sin barrio"} - {formatNumber(space.surface)} m2{space.photos ? ` - ${space.photos} fotos` : ""}</span>
-              </div>
-              <div className="audit-control-dots">
-                {space.controls.map((control, index) => <span key={`${space.id}-${index}`} className={control ?? "empty"}>{control ? control.toUpperCase() : "-"}</span>)}
-              </div>
-              <small>{space.date ? formatDate(space.date) : "Sin registro"}</small>
-            </article>)}
-            {!reportView.spacesDetail.length && <p className="dashboard-empty">{reportView.empty}</p>}
-          </div>
+          {activeMetric === "observed" ? (
+            <AuditObservationReview items={observationItems} error={observationsError} />
+          ) : activeMetric === "evidence" ? (
+            <EvidenceGallery spaces={reportView.spacesDetail} selectedId={selectedEvidenceSpaceId} onSelect={setSelectedEvidenceSpaceId} empty={reportView.empty} />
+          ) : (
+            <div className="audit-space-list">
+              {reportView.spacesDetail.map((space) => <article key={space.id} className={space.hasObservation ? "observed" : space.isReviewed ? "ready" : "pending"}>
+                <div>
+                  <strong>{space.name}</strong>
+                  <span>{space.neighborhood || "Sin barrio"} - {formatNumber(space.surface)} m2{space.photos ? ` - ${space.photos} fotos` : ""}</span>
+                </div>
+                <div className="audit-control-dots">
+                  {space.controls.map((control, index) => <span key={`${space.id}-${index}`} className={control ?? "empty"}>{control ? control.toUpperCase() : "-"}</span>)}
+                </div>
+                <small>{space.date ? formatDate(space.date) : "Sin registro"}</small>
+              </article>)}
+              {!reportView.spacesDetail.length && <p className="dashboard-empty">{reportView.empty}</p>}
+            </div>
+          )}
         </div>
       </section>
 
@@ -202,6 +271,17 @@ export function AuditDashboard({ spaces, providers, currentUser }: { spaces: Spa
         </div>
       </aside>
     </div>
+
+    <section className="audit-panel audit-recent-evidence-panel">
+      <div className="audit-panel-title">
+        <div>
+          <h2>Evidencias recientes</h2>
+          <p>Ultimas fotos cargadas por supervisores o equipos de campo</p>
+        </div>
+        <span>{selectedProviderId === "all" ? "Todas" : report.title}</span>
+      </div>
+      <RecentEvidenceList items={recentEvidence} />
+    </section>
 
     <section className="audit-panel">
       <div className="audit-panel-title">
@@ -233,12 +313,124 @@ function AuditStat({ icon: Icon, label, value, note, tone = "default", active, o
   </button>;
 }
 
-function buildAudit(spaces: SpaceRecord[], providers: Provider[], records: ControlRecord[]) {
+function EvidenceGallery({ spaces, selectedId, onSelect, empty }: { spaces: ProviderRow["spacesDetail"]; selectedId: string; onSelect: (id: string) => void; empty: string }) {
+  const selectedSpace = spaces.find((space) => space.id === selectedId) ?? spaces[0];
+  const photoGroups = selectedSpace ? groupPhotosByDate(selectedSpace.photoItems) : [];
+  const controlGroups = selectedSpace ? groupPhotosByControl(selectedSpace.photoItems) : [];
+
+  if (!spaces.length) return <p className="dashboard-empty">{empty}</p>;
+
+  return <div className="audit-evidence-view">
+    <div className="audit-gallery-grid">
+      {spaces.map((space) => {
+        const cover = space.photoItems[0];
+        const latestDate = cover?.createdAt ?? space.date;
+        const isActive = selectedSpace?.id === space.id;
+        return <article key={space.id} className={`audit-gallery-card ${isActive ? "active" : ""}`}>
+          <button onClick={() => onSelect(space.id)} aria-pressed={isActive}>
+            <div className="audit-gallery-cover">
+              {cover ? <img src={cover.url} alt={space.name} /> : <span>Sin foto</span>}
+              <div><Camera size={24} /><b>{space.photos} {space.photos === 1 ? "foto" : "fotos"}</b></div>
+            </div>
+            <div className="audit-gallery-body">
+              <span>{latestDate ? formatDate(latestDate) : "Sin fecha"}</span>
+              <strong>{space.name}</strong>
+              <small>{space.providerName || "Sin cooperativa"}</small>
+              <em>Ver fotos</em>
+            </div>
+          </button>
+        </article>;
+      })}
+    </div>
+
+    {selectedSpace && <section className="audit-photo-book">
+      <div className="audit-photo-book-head">
+        <div>
+          <strong>{selectedSpace.name}</strong>
+          <span>{selectedSpace.neighborhood || "Sin barrio"} - {selectedSpace.providerName || "Sin cooperativa"}</span>
+        </div>
+        <b>{selectedSpace.photos} {selectedSpace.photos === 1 ? "foto" : "fotos"}</b>
+      </div>
+      <div className="audit-photo-day-list">
+        <div className="audit-control-photo-summary">
+          {controlGroups.map((group) => <span key={group.type}><b>{group.photos.length}</b>{photoTypeLabel(group.type)}</span>)}
+        </div>
+        {photoGroups.map((group) => <div key={group.date} className="audit-photo-day">
+          <div className="audit-photo-day-title">
+            <CalendarDays size={15} />
+            <strong>{formatDate(group.date)}</strong>
+            <span>{group.photos.length} {group.photos.length === 1 ? "foto" : "fotos"}</span>
+          </div>
+          <div className="audit-photo-book-grid">
+            {group.photos.map((photo) => <figure key={photo.id}>
+              <img src={photo.url} alt={`${selectedSpace.name} - ${photo.type}`} />
+              <figcaption>
+                <span>{photoTypeLabel(photo.type)}</span>
+                <time>{formatTime(photo.createdAt)}</time>
+              </figcaption>
+            </figure>)}
+          </div>
+        </div>)}
+      </div>
+    </section>}
+  </div>;
+}
+
+function AuditObservationReview({ items, error }: { items: Array<AuditObservation & { space?: SpaceRecord }>; error: string | null }) {
+  if (error) return <p className="audit-observation-note error">{error}</p>;
+
+  return <div className="audit-observation-list audit-observation-review">
+    {items.map((observation) => <article key={observation.id}>
+      <MessageSquarePlus size={16} />
+      <div>
+        <strong>{observation.space?.name ?? "Espacio sin identificar"}</strong>
+        <p>{observation.observation}</p>
+        <span>{observation.space?.provider?.name ?? "Sin cooperativa"} - {formatDate(observation.created_at)}</span>
+      </div>
+    </article>)}
+    {!items.length && <p className="dashboard-empty">Todavia no hay observaciones cargadas para esta seleccion.</p>}
+  </div>;
+}
+
+function RecentEvidenceList({ items }: { items: Array<{ id: string; image_url: string; photo_type: string; created_at: string; spaceName: string; providerName: string; neighborhood: string }> }) {
+  if (!items.length) return <p className="dashboard-empty audit-evidence-empty">Todavia no hay evidencias cargadas para esta seleccion.</p>;
+  const groups = groupPhotosByDate(items.map((photo) => ({
+    id: photo.id,
+    url: photo.image_url,
+    type: photo.photo_type,
+    createdAt: photo.created_at,
+    spaceName: photo.spaceName,
+    providerName: photo.providerName,
+    neighborhood: photo.neighborhood,
+  })));
+
+  return <div className="audit-recent-evidence-days">
+    {groups.map((group) => <div key={group.date} className="audit-recent-evidence-day">
+      <div className="audit-photo-day-title">
+        <CalendarDays size={15} />
+        <strong>{formatDate(group.date)}</strong>
+        <span>{group.photos.length} {group.photos.length === 1 ? "foto" : "fotos"}</span>
+      </div>
+      <div className="audit-recent-evidence-grid">
+        {group.photos.map((photo) => <figure key={photo.id}>
+          <img src={photo.url} alt={photo.spaceName} />
+          <figcaption>
+            <span>{photoTypeLabel(photo.type)}</span>
+            <strong>{photo.spaceName}</strong>
+            <small>{photo.providerName} - {photo.neighborhood} - {formatTime(photo.createdAt)}</small>
+          </figcaption>
+        </figure>)}
+      </div>
+    </div>)}
+  </div>;
+}
+
+function buildAudit(spaces: SpaceRecord[], providers: Provider[], records: ControlRecord[], month: string) {
   const spacesById = new Map(spaces.map((space) => [space.id, space]));
   const providerById = new Map(providers.map((provider) => [provider.id, provider]));
   const reviewedRecords = records.filter(hasAnyControl);
   const reviewedSpaceIds = new Set(reviewedRecords.map((record) => record.green_space_id));
-  const photoDates = spaces.flatMap((space) => space.photos.map((photo) => photo.created_at)).sort((left, right) => right.localeCompare(left));
+  const photoDates = spaces.flatMap((space) => space.photos.filter((photo) => isInMonth(photo.created_at, month)).map((photo) => photo.created_at)).sort((left, right) => right.localeCompare(left));
   const recordsByProvider = new Map<string, ControlRecord[]>();
   const recordsBySpace = new Map<string, ControlRecord>();
 
@@ -253,11 +445,11 @@ function buildAudit(spaces: SpaceRecord[], providers: Provider[], records: Contr
     .map((provider) => ({ provider, assignedSpaces: spaces.filter((space) => space.provider?.id === provider.id) }))
     .filter((row) => row.assignedSpaces.length > 0);
 
-  const providerRows = providersWithAssignedSpaces.map(({ provider, assignedSpaces }) => buildProviderRow(provider, assignedSpaces, recordsByProvider.get(provider.id) ?? [], recordsBySpace))
+  const providerRows = providersWithAssignedSpaces.map(({ provider, assignedSpaces }) => buildProviderRow(provider, assignedSpaces, recordsByProvider.get(provider.id) ?? [], recordsBySpace, month))
     .sort((left, right) => right.negative - left.negative || right.pending - left.pending || left.provider.name.localeCompare(right.provider.name));
 
   const totalProvider: Provider = { id: "all", name: "Todas las cooperativas", contact_name: "", phone: "", email: "", active: true, created_at: "", updated_at: "" };
-  const totalRow = buildProviderRow(totalProvider, spaces, records, recordsBySpace);
+  const totalRow = buildProviderRow(totalProvider, spaces, records, recordsBySpace, month);
   const negativeControls = countControls(records, "no");
   const coverage = spaces.length ? Math.round((reviewedSpaceIds.size / spaces.length) * 100) : 0;
 
@@ -287,11 +479,11 @@ function buildAudit(spaces: SpaceRecord[], providers: Provider[], records: Contr
   };
 }
 
-function buildProviderRow(provider: Provider, assignedSpaces: SpaceRecord[], providerRecords: ControlRecord[], recordsBySpace: Map<string, ControlRecord>) {
+function buildProviderRow(provider: Provider, assignedSpaces: SpaceRecord[], providerRecords: ControlRecord[], recordsBySpace: Map<string, ControlRecord>, month: string) {
   const reviewed = new Set(providerRecords.filter(hasAnyControl).map((record) => record.green_space_id)).size;
   const pending = Math.max(assignedSpaces.length - reviewed, 0);
   const negative = countControls(providerRecords, "no");
-  const photos = assignedSpaces.reduce((total, space) => total + space.photos.length, 0);
+  const photos = assignedSpaces.reduce((total, space) => total + space.photos.filter((photo) => isInMonth(photo.created_at, month)).length, 0);
   const surface = assignedSpaces.reduce((total, space) => total + (space.surface_m2 ?? 0), 0);
   const status = negative > 0 ? "Observado" : pending > 0 ? "Pendiente" : "Al dia";
   const statusTone = negative > 0 ? "danger" : pending > 0 ? "pending" : "ok";
@@ -300,6 +492,10 @@ function buildProviderRow(provider: Provider, assignedSpaces: SpaceRecord[], pro
     const controls = record ? controlKeys.map((key) => record[key]) : [null, null, null];
     const controlDates = record ? [record.control_1_date, record.control_2_date, record.control_3_date] : [null, null, null];
     const dates = controlDates.filter(Boolean) as string[];
+    const monthlyPhotos = space.photos
+      .filter((photo) => isInMonth(photo.created_at, month))
+      .sort((left, right) => right.created_at.localeCompare(left.created_at));
+
     return {
       id: space.id,
       name: space.name,
@@ -308,7 +504,13 @@ function buildProviderRow(provider: Provider, assignedSpaces: SpaceRecord[], pro
       controls,
       isReviewed: controls.some(Boolean),
       hasObservation: controls.some((control) => control === "no"),
-      photos: space.photos.length,
+      photos: monthlyPhotos.length,
+      photoItems: monthlyPhotos.map((photo) => ({
+        id: photo.id,
+        url: photo.image_url,
+        type: photo.photo_type,
+        createdAt: photo.created_at,
+      })),
       providerName: space.provider?.name ?? (provider.id === "all" ? "Sin cooperativa" : provider.name),
       controlDates,
       date: dates.at(-1) ?? record?.updated_at ?? null,
@@ -486,6 +688,98 @@ function downloadAuditPdf({ filterTitle, month, period, report, currentUser }: {
   URL.revokeObjectURL(url);
 }
 
+async function downloadEvidenceBookPdf({ month, period, report, currentUser }: { month: string; period: string; report: ProviderRow; currentUser: UserProfile }) {
+  const width = 842;
+  const height = 595;
+  const margin = 36;
+  const issuedAt = formatDate(new Date().toISOString());
+  const photos = report.spacesDetail.flatMap((space) => space.photoItems.map((photo) => ({
+    ...photo,
+    spaceName: space.name,
+    providerName: space.providerName || "Sin cooperativa",
+    neighborhood: space.neighborhood || "Sin barrio",
+  })));
+  const loadedPhotos = (await Promise.all(photos.map(loadPhotoForPdf))).filter((photo): photo is PdfPhoto => Boolean(photo));
+  const pageGroups = chunk(loadedPhotos, 2);
+  const pageContents: string[][] = [];
+  const pages: string[] = [];
+
+  if (!pageGroups.length) pageGroups.push([]);
+
+  for (const group of pageGroups) {
+    const content: string[] = [];
+    pageContents.push(content);
+    addPdfRect(content, 0, height - 78, width, 78, "0.02 0.25 0.55");
+    addPdfText(content, "MUNICIPALIDAD DE SAN MIGUEL DE TUCUMAN", margin, height - 32, 9, true, "1 1 1");
+    addPdfText(content, "Book fotografico de evidencias", margin, height - 52, 17, true, "1 1 1");
+    addPdfText(content, `${period} | ${report.title}`, margin, height - 68, 9, false, "0.86 0.93 1");
+    addPdfText(content, `Exportado: ${issuedAt} | ${currentUser.full_name}`, width - margin - 230, height - 32, 8, false, "0.86 0.93 1");
+
+    if (!group.length) {
+      addPdfRect(content, margin, height - 168, width - margin * 2, 62, "0.96 0.98 1");
+      addPdfText(content, "No hay fotos cargadas para esta seleccion.", margin + 16, height - 136, 12, true, "0.06 0.15 0.28");
+      continue;
+    }
+
+    group.forEach((photo, index) => {
+      const x = index === 0 ? margin : width / 2 + 10;
+      const y = 92;
+      const boxWidth = width / 2 - margin - 18;
+      const boxHeight = 340;
+      const labelY = y + boxHeight + 26;
+      const fit = fitImage(photo.width, photo.height, boxWidth, boxHeight);
+      const imageName = `Im${pageContents.length}_${index + 1}`;
+      content.push(`q ${fit.width.toFixed(2)} 0 0 ${fit.height.toFixed(2)} ${(x + fit.x).toFixed(2)} ${(y + fit.y).toFixed(2)} cm /${imageName} Do Q`);
+      addPdfRect(content, x, y - 42, boxWidth, 36, "0.96 0.98 1");
+      addPdfText(content, truncate(photo.spaceName, 40), x + 8, labelY, 10, true, "0.06 0.15 0.28");
+      addPdfText(content, truncate(photo.providerName, 42), x + 8, labelY - 14, 8, false, "0.37 0.45 0.55");
+      addPdfText(content, `${photoTypeLabel(photo.type).toUpperCase()} | ${formatDate(photo.createdAt)} | ${photo.neighborhood}`, x + 8, y - 20, 8, false, "0.25 0.34 0.45");
+    });
+  }
+
+  const allObjects = [
+    `<< /Type /Catalog /Pages 2 0 R >>`,
+    "",
+    `<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>`,
+    `<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>`,
+  ];
+
+  for (let index = 0; index < pageContents.length; index += 1) {
+    const group = pageGroups[index];
+    const pageObject = allObjects.length + 1;
+    const contentObject = pageObject + 1;
+    const imageObjectNumbers = group.map((_, imageIndex) => contentObject + 1 + imageIndex);
+    const xObjects = imageObjectNumbers.map((objectNumber, imageIndex) => `/Im${index + 1}_${imageIndex + 1} ${objectNumber} 0 R`).join(" ");
+    const stream = pageContents[index].join("\n");
+    pages.push(`${pageObject} 0 R`);
+    allObjects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${width} ${height}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> /XObject << ${xObjects} >> >> /Contents ${contentObject} 0 R >>`);
+    allObjects.push(`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`);
+    for (const photo of group) {
+      allObjects.push(`<< /Type /XObject /Subtype /Image /Width ${photo.width} /Height ${photo.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter [/ASCIIHexDecode /DCTDecode] /Length ${photo.hex.length + 1} >>\nstream\n${photo.hex}>\nendstream`);
+    }
+  }
+  allObjects[1] = `<< /Type /Pages /Kids [${pages.join(" ")}] /Count ${pages.length} >>`;
+
+  let pdf = "%PDF-1.4\n";
+  const offsets = [0];
+  allObjects.forEach((object, index) => {
+    offsets.push(pdf.length);
+    pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
+  });
+  const xref = pdf.length;
+  pdf += `xref\n0 ${allObjects.length + 1}\n0000000000 65535 f \n`;
+  offsets.slice(1).forEach((offset) => { pdf += `${String(offset).padStart(10, "0")} 00000 n \n`; });
+  pdf += `trailer\n<< /Size ${allObjects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
+
+  const blob = new Blob([pdf], { type: "application/pdf" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `book-evidencias-${slug(report.title)}-${month}.pdf`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 function addInfoBox(content: string[], x: number, y: number, width: number, label: string, value: string | number) {
   addPdfRect(content, x, y, width, 38, "0.96 0.98 1");
   addPdfText(content, label, x + 8, y + 23, 7, false, "0.37 0.45 0.55");
@@ -511,6 +805,73 @@ function addPdfText(content: string[], text: string, x: number, y: number, size:
 
 function addPdfRect(content: string[], x: number, y: number, width: number, height: number, color: string) {
   content.push(`${color} rg ${x.toFixed(2)} ${y.toFixed(2)} ${width.toFixed(2)} ${height.toFixed(2)} re f`);
+}
+
+type PdfPhoto = {
+  hex: string;
+  width: number;
+  height: number;
+  url: string;
+  type: string;
+  createdAt: string;
+  spaceName: string;
+  providerName: string;
+  neighborhood: string;
+};
+
+async function loadPhotoForPdf(photo: Omit<PdfPhoto, "hex" | "width" | "height">): Promise<PdfPhoto | null> {
+  try {
+    const response = await fetch(photo.url);
+    const blob = await response.blob();
+    const imageUrl = URL.createObjectURL(blob);
+    const image = await loadImage(imageUrl);
+    const maxSide = 1100;
+    const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(image.width * scale));
+    canvas.height = Math.max(1, Math.round(image.height * scale));
+    const context = canvas.getContext("2d");
+    if (!context) return null;
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    URL.revokeObjectURL(imageUrl);
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.82);
+    return { ...photo, width: canvas.width, height: canvas.height, hex: dataUrlToHex(dataUrl) };
+  } catch {
+    return null;
+  }
+}
+
+function loadImage(src: string) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = reject;
+    image.src = src;
+  });
+}
+
+function dataUrlToHex(dataUrl: string) {
+  const binary = atob(dataUrl.split(",")[1] ?? "");
+  let hex = "";
+  for (let index = 0; index < binary.length; index += 1) {
+    hex += binary.charCodeAt(index).toString(16).padStart(2, "0");
+  }
+  return hex;
+}
+
+function fitImage(imageWidth: number, imageHeight: number, boxWidth: number, boxHeight: number) {
+  const scale = Math.min(boxWidth / imageWidth, boxHeight / imageHeight);
+  const width = imageWidth * scale;
+  const height = imageHeight * scale;
+  return { width, height, x: (boxWidth - width) / 2, y: (boxHeight - height) / 2 };
+}
+
+function chunk<T>(items: T[], size: number) {
+  const chunks: T[][] = [];
+  for (let index = 0; index < items.length; index += size) chunks.push(items.slice(index, index + size));
+  return chunks;
 }
 
 function pdfText(value: string | number | null | undefined) {
@@ -558,6 +919,28 @@ function slug(value: string) {
   return pdfText(value).replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-|-$/g, "").toLowerCase() || "auditoria";
 }
 
+function isInMonth(value: string, month: string) {
+  return value.slice(0, 7) === month;
+}
+
+function groupPhotosByDate<T extends { createdAt: string }>(photos: T[]) {
+  const groups = new Map<string, T[]>();
+  for (const photo of photos) {
+    const day = photo.createdAt.slice(0, 10);
+    groups.set(day, [...(groups.get(day) ?? []), photo]);
+  }
+  return Array.from(groups.entries())
+    .map(([date, groupedPhotos]) => ({ date, photos: groupedPhotos.sort((left, right) => right.createdAt.localeCompare(left.createdAt)) }))
+    .sort((left, right) => right.date.localeCompare(left.date));
+}
+
+function groupPhotosByControl<T extends { type: string }>(photos: T[]) {
+  return ["antes", "durante", "despues"].map((type) => ({
+    type,
+    photos: photos.filter((photo) => photo.type === type),
+  }));
+}
+
 function currentMonth() {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -570,6 +953,10 @@ function formatMonth(value: string) {
 function formatDate(value: string) {
   const date = /^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(`${value}T12:00:00`) : new Date(value);
   return new Intl.DateTimeFormat("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" }).format(date);
+}
+
+function formatTime(value: string) {
+  return new Intl.DateTimeFormat("es-AR", { hour: "2-digit", minute: "2-digit" }).format(new Date(value));
 }
 
 function formatNumber(value: number) {

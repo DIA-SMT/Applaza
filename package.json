@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "typecheck": "tsc --noEmit --pretty false",
     "geocode": "node scripts/geocode-green-spaces.mjs",
     "start": "next start",
     "lint": "next lint"

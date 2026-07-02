@@ -5,6 +5,7 @@ import Image from "next/image";
 import { CalendarDays, Crosshair, LoaderCircle, MapPin, Pencil, Save, UserRound, X } from "lucide-react";
 import type { Fulfilled, MaintenancePhoto, MaintenanceStatus, Provider, SpaceRecord, SpaceType, UserProfile } from "@/types/domain";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
+import { photoTypeLabel } from "@/lib/photo-label";
 import { StatusBadge } from "./status-badge";
 import { PhotoUpload } from "./photo-upload";
 
@@ -53,14 +54,14 @@ export function SpaceDetail({ space, providers, currentUser, onClose, onPhoto, o
       </div> : <>
         <div className="info-line"><MapPin size={18} /><div><small>Ubicación</small><strong>{space.address}</strong><span>{space.neighborhood}</span></div></div>
         {canEdit && <button className="relocate-button" onClick={() => onRelocate(space)}><Crosshair size={16} /><div><strong>Corregir ubicación en el mapa</strong><span>{space.latitude != null && space.longitude != null ? `${space.latitude.toFixed(5)}, ${space.longitude.toFixed(5)}` : "Este espacio todavía no tiene coordenadas"}</span></div></button>}
-        {(space.section_code || space.surface_m2) && <div className="date-grid"><div><small>Sección</small><strong>{space.section_code || "—"}</strong></div><div><small>Superficie</small><strong>{space.surface_m2 ? `${space.surface_m2.toLocaleString("es-AR")} m²` : "—"}</strong></div></div>}
-        <div className="info-line"><UserRound size={18} /><div><small>Proveedor asignado</small><strong>{space.provider?.name ?? "Sin asignar"}</strong><span>{space.provider?.contact_name}</span></div></div>
+        {(space.section_code || space.surface_m2) && <div className="detail-info-grid"><div className="detail-info-card"><small>Sección</small><strong>{space.section_code || "—"}</strong></div><div className="detail-info-card"><small>Superficie</small><strong>{space.surface_m2 ? `${space.surface_m2.toLocaleString("es-AR")} m²` : "—"}</strong></div></div>}
+        <div className="info-line"><UserRound size={18} /><div><small>Cooperativa asignada</small><strong>{space.provider?.name ?? "Sin asignar"}</strong><span>{space.provider?.contact_name}</span></div></div>
         <div className="date-grid"><div><CalendarDays size={16} /><small>Inicio</small><strong>{date(space.task?.start_date)}</strong></div><div><CalendarDays size={16} /><small>Fin previsto</small><strong>{date(space.task?.end_date)}</strong></div></div>
         <div className="compliance"><span>Cumplimiento</span><strong className={`fulfilled-${space.task?.fulfilled}`}>{fulfilledLabel[space.task?.fulfilled ?? "pendiente"]}</strong></div>
         <button className="detail-expand" onClick={() => setExpanded((value) => !value)}>{expanded ? "Ocultar detalle" : "Ver detalle"}</button>
         {expanded && <div className="detail-metadata"><div><small>Identificador</small><strong>{space.id.slice(0, 8)}</strong></div><div><small>Coordenadas</small><strong>{space.latitude != null && space.longitude != null ? `${space.latitude.toFixed(5)}, ${space.longitude.toFixed(5)}` : "Sin ubicación"}</strong></div><div><small>Fuente</small><strong>{space.section_code ? `Padrón · Sección ${space.section_code}` : "Registro operativo"}</strong></div></div>}
         <section><h3>Observaciones</h3><p className="observations">{space.task?.observations || "Sin observaciones registradas."}</p></section>
-        <section><div className="section-title"><h3>Evidencias fotográficas</h3><span>{space.photos.length}</span></div>{space.photos.length ? <div className="photo-grid">{space.photos.map((photo) => <figure key={photo.id}><Image src={photo.image_url} alt={`Evidencia ${photo.photo_type}`} width={180} height={120} unoptimized={photo.image_url.startsWith("blob:")} /><figcaption>{photo.photo_type}</figcaption></figure>)}</div> : <p className="empty">Todavía no hay fotos asociadas.</p>}</section>
+        <section><div className="section-title"><h3>Evidencias fotográficas</h3><span>{space.photos.length}</span></div>{space.photos.length ? <div className="photo-grid">{space.photos.map((photo) => <figure key={photo.id}><Image src={photo.image_url} alt={`Evidencia ${photoTypeLabel(photo.photo_type)}`} width={180} height={120} unoptimized={photo.image_url.startsWith("blob:")} /><figcaption>{photoTypeLabel(photo.photo_type)}</figcaption></figure>)}</div> : <p className="empty">Todavía no hay fotos asociadas.</p>}</section>
         {space.task && <PhotoUpload taskId={space.task.id} spaceName={space.name} onUploaded={onPhoto} />}
       </>}
     </div>

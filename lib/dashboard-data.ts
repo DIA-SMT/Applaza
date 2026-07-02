@@ -27,16 +27,40 @@ export async function getDashboardData(authenticatedClient?: SupabaseClient): Pr
     const providerById = new Map(providers.map((provider) => [provider.id, provider]));
     const providerBySection = new Map(sections.map((section) => [section.section_code, providerById.get(section.provider_id)]));
     const latestTaskBySpace = new Map<string, MaintenanceTask>();
-    for (const task of tasks) if (!latestTaskBySpace.has(task.green_space_id)) latestTaskBySpace.set(task.green_space_id, task);
+    const taskIdsBySpace = new Map<string, Set<string>>();
+    const photosByTask = new Map<string, MaintenancePhoto[]>();
 
-    const spaces: SpaceRecord[] = ((spacesResult.data ?? []) as GreenSpace[]).map((space) => {
+    for (const task of tasks) {
+      if (!latestTaskBySpace.has(task.green_space_id)) latestTaskBySpace.set(task.green_space_id, task);
+      const taskIds = taskIdsBySpace.get(task.green_space_id) ?? new Set<string>();
+      taskIds.add(task.id);
+      taskIdsBySpace.set(task.green_space_id, taskIds);
+    }
+
+    for (const photo of photos) {
+      const taskPhotos = photosByTask.get(photo.maintenance_task_id) ?? [];
+      taskPhotos.push(photo);
+      photosByTask.set(photo.maintenance_task_id, taskPhotos);
+    }
+
+    const documentSpaces = ((spacesResult.data ?? []) as GreenSpace[]).filter(isDocumentSpace);
+    const sourceSpaces = documentSpaces.length ? documentSpaces : (spacesResult.data ?? []) as GreenSpace[];
+
+    const spaces: SpaceRecord[] = sourceSpaces.map((space) => {
       const task = latestTaskBySpace.get(space.id);
       const provider = task ? providerById.get(task.provider_id) : space.section_code ? providerBySection.get(space.section_code) : undefined;
-      return { ...space, status: task?.status ?? space.status, task, provider, photos: task ? photos.filter((photo) => photo.maintenance_task_id === task.id) : [] };
+      const taskIds = Array.from(taskIdsBySpace.get(space.id) ?? []);
+      const spacePhotos = taskIds.flatMap((taskId) => photosByTask.get(taskId) ?? []);
+      return { ...space, status: task?.status ?? space.status, task, provider, photos: spacePhotos };
     });
     return { spaces, providers, error: null };
   } catch (error) {
     console.error("Supabase dashboard error:", error);
     return { spaces: [], providers: [], error: "No se pudieron cargar los datos operativos desde Supabase." };
   }
+}
+
+function isDocumentSpace(space: GreenSpace) {
+  const match = space.source_key?.match(/^pdf-2026-06-30-(\d+)$/);
+  return Boolean(match && Number(match[1]) <= 218);
 }
