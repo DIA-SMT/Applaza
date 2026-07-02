@@ -32,6 +32,7 @@ type AuditObservation = {
   created_by: string | null;
   created_at: string;
 };
+type AuditObservationItem = AuditObservation & { space?: SpaceRecord };
 const controlKeys = ["control_1", "control_2", "control_3"] as const;
 
 export function AuditDashboard({ spaces, providers, currentUser }: { spaces: SpaceRecord[]; providers: Provider[]; currentUser: UserProfile }) {
@@ -129,6 +130,8 @@ export function AuditDashboard({ spaces, providers, currentUser }: { spaces: Spa
     .sort((left, right) => right.created_at.localeCompare(left.created_at)), [spaces, selectedProviderId, month]);
   const commandSummary = activeMetric === "observed" ? `${observationItems.length} observaciones cargadas por supervision` : reportView.summary;
   const periodLabel = formatMonth(month);
+  const canExport = activeMetric === "observed" ? observationItems.length > 0 : reportView.spacesDetail.length > 0;
+  const exportLabel = activeMetric === "evidence" ? "Exportar book" : activeMetric === "observed" ? "Exportar observaciones" : "Exportar PDF";
 
   useEffect(() => {
     setSelectedEvidenceSpaceId("");
@@ -157,7 +160,9 @@ export function AuditDashboard({ spaces, providers, currentUser }: { spaces: Spa
   async function exportReport() {
     setExporting(true);
     try {
-      if (activeMetric === "evidence") {
+      if (activeMetric === "observed") {
+        downloadObservationsPdf({ month, period: periodLabel, title: report.title, observations: observationItems, currentUser });
+      } else if (activeMetric === "evidence") {
         await downloadEvidenceBookPdf({ month, period: periodLabel, report: { ...report, spacesDetail: reportView.spacesDetail }, currentUser });
       } else {
         downloadAuditPdf({ filterTitle: reportView.title, month, period: periodLabel, report: { ...report, spacesDetail: reportView.spacesDetail }, currentUser });
@@ -205,8 +210,8 @@ export function AuditDashboard({ spaces, providers, currentUser }: { spaces: Spa
         <strong>{report.title}</strong>
         <span>{periodLabel} - {loading ? "actualizando" : commandSummary}</span>
       </div>
-      <button className="audit-export" onClick={exportReport} disabled={!report.spaces || exporting}>
-        {exporting ? <LoaderCircle className="spin" size={17} /> : <Download size={17} />}{activeMetric === "evidence" ? "Exportar book" : "Exportar PDF"}
+      <button className="audit-export" onClick={exportReport} disabled={!canExport || exporting}>
+        {exporting ? <LoaderCircle className="spin" size={17} /> : <Download size={17} />}{exportLabel}
       </button>
     </section>
 
@@ -688,6 +693,107 @@ function downloadAuditPdf({ filterTitle, month, period, report, currentUser }: {
   URL.revokeObjectURL(url);
 }
 
+function downloadObservationsPdf({ month, period, title, observations, currentUser }: { month: string; period: string; title: string; observations: AuditObservationItem[]; currentUser: UserProfile }) {
+  const width = 842;
+  const height = 595;
+  const margin = 36;
+  const { from, to } = periodRange(month);
+  const issuedAt = formatDate(new Date().toISOString());
+  const pages: string[] = [];
+  const pageContents: string[][] = [];
+  let pageIndex = -1;
+  let content: string[] = [];
+  let y = 0;
+
+  function startPage() {
+    pageIndex += 1;
+    content = [];
+    pageContents.push(content);
+    y = height - margin;
+    addPdfRect(content, 0, height - 78, width, 78, "0.02 0.25 0.55");
+    addPdfText(content, "MUNICIPALIDAD DE SAN MIGUEL DE TUCUMAN", margin, height - 32, 9, true, "1 1 1");
+    addPdfText(content, "Informe de observaciones de supervision", margin, height - 52, 17, true, "1 1 1");
+    addPdfText(content, `${period} | ${title}`, margin, height - 68, 9, false, "0.86 0.93 1");
+    addPdfText(content, `Pagina ${pageIndex + 1}`, width - margin - 48, height - 32, 8, false, "0.86 0.93 1");
+    y = height - 102;
+  }
+
+  function ensureSpace(required: number) {
+    if (y - required < margin) startPage();
+  }
+
+  startPage();
+  addPdfText(content, "Resumen de observaciones", margin, y, 12, true, "0.06 0.15 0.28");
+  y -= 20;
+  addInfoBox(content, margin, y - 36, 150, "Fecha de exportacion", issuedAt);
+  addInfoBox(content, margin + 158, y - 36, 130, "Desde", from);
+  addInfoBox(content, margin + 296, y - 36, 130, "Hasta", to);
+  addInfoBox(content, margin + 434, y - 36, 170, "Emitido por", currentUser.full_name);
+  addInfoBox(content, margin + 612, y - 36, 158, "Seleccion", title);
+  y -= 56;
+  addInfoBox(content, margin, y - 36, 150, "Observaciones", observations.length);
+  addInfoBox(content, margin + 158, y - 36, 220, "Origen", "Notas cargadas por supervision");
+  y -= 58;
+
+  if (!observations.length) {
+    addPdfRect(content, margin, y - 40, width - margin * 2, 46, "0.96 0.98 1");
+    addPdfText(content, "No hay observaciones para la seleccion actual.", margin + 12, y - 18, 10, false, "0.37 0.45 0.55");
+  }
+
+  for (const observation of observations) {
+    const lines = wrapPdfText(observation.observation, 108).slice(0, 4);
+    const rowHeight = 48 + lines.length * 10;
+    const spaceName = observation.space?.name ?? "Espacio sin identificar";
+    const providerName = observation.space?.provider?.name ?? "Sin cooperativa";
+    const reference = observation.space?.neighborhood || observation.space?.address || "Sin referencia";
+    ensureSpace(rowHeight + 10);
+    addPdfRect(content, margin, y - rowHeight + 4, width - margin * 2, rowHeight, "0.96 0.98 1");
+    addPdfText(content, truncate(spaceName, 54), margin + 10, y - 12, 10, true, "0.06 0.15 0.28");
+    addPdfText(content, truncate(`${providerName} | ${reference}`, 82), margin + 10, y - 25, 8, false, "0.37 0.45 0.55");
+    addPdfText(content, formatDate(observation.created_at), width - margin - 96, y - 12, 8, false, "0.25 0.34 0.45");
+    lines.forEach((line, index) => {
+      addPdfText(content, line, margin + 10, y - 42 - index * 10, 8, false, "0.15 0.22 0.32");
+    });
+    y -= rowHeight + 8;
+  }
+
+  const objects: string[] = [];
+  for (let index = 0; index < pageContents.length; index += 1) {
+    const stream = pageContents[index].join("\n");
+    const pageObject = 5 + index * 2;
+    const contentObject = pageObject + 1;
+    pages.push(`${pageObject} 0 R`);
+    objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${width} ${height}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${contentObject} 0 R >>`);
+    objects.push(`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`);
+  }
+
+  const allObjects = [
+    `<< /Type /Catalog /Pages 2 0 R >>`,
+    `<< /Type /Pages /Kids [${pages.join(" ")}] /Count ${pages.length} >>`,
+    `<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>`,
+    `<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>`,
+    ...objects,
+  ];
+  let pdf = "%PDF-1.4\n";
+  const offsets = [0];
+  allObjects.forEach((object, index) => {
+    offsets.push(pdf.length);
+    pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
+  });
+  const xref = pdf.length;
+  pdf += `xref\n0 ${allObjects.length + 1}\n0000000000 65535 f \n`;
+  offsets.slice(1).forEach((offset) => { pdf += `${String(offset).padStart(10, "0")} 00000 n \n`; });
+  pdf += `trailer\n<< /Size ${allObjects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
+
+  const blob = new Blob([pdf], { type: "application/pdf" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `observaciones-${slug(title)}-${month}.pdf`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 async function downloadEvidenceBookPdf({ month, period, report, currentUser }: { month: string; period: string; report: ProviderRow; currentUser: UserProfile }) {
   const width = 842;
   const height = 595;
@@ -913,6 +1019,23 @@ function periodRange(month: string) {
 
 function truncate(value: string, maxLength: number) {
   return value.length > maxLength ? `${value.slice(0, maxLength - 1)}.` : value;
+}
+
+function wrapPdfText(value: string, maxLength: number) {
+  const words = value.replace(/\s+/g, " ").trim().split(" ");
+  const lines: string[] = [];
+  let line = "";
+  for (const word of words) {
+    const nextLine = line ? `${line} ${word}` : word;
+    if (nextLine.length > maxLength && line) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = nextLine;
+    }
+  }
+  if (line) lines.push(line);
+  return lines.length ? lines : ["Sin detalle."];
 }
 
 function slug(value: string) {
