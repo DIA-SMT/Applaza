@@ -7,6 +7,7 @@ import type { MaintenancePhoto, MaintenanceTask, Provider, SpaceRecord, UserProf
 import { getSupabaseBrowserClient } from "@/lib/supabase";
 import { photoTypeLabel } from "@/lib/photo-label";
 import { AuditDashboard } from "./audit-dashboard";
+import { AssistantChat } from "./assistant-chat";
 import { ControlRegister } from "./control-register";
 import { OperationalMap } from "./operational-map";
 import { PhotoUpload } from "./photo-upload";
@@ -84,6 +85,7 @@ export function DashboardView({ initialSpaces, providers, currentUser, dataError
         : view === "control"
           ? <ControlRegister providers={providers} spaces={spaces} />
           : <Dashboard spaces={spaces} providers={providers} currentUser={currentUser} stats={stats} latestPhotos={latestPhotos} dataError={dataError} onPhoto={addPhoto} onOpenMap={() => changeView("map")} />}
+      <AssistantChat />
     </main>
   </div>;
 }

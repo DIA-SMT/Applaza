@@ -24,3 +24,9 @@ La importación de espacios es idempotente mediante `source_key`: ejecutar nueva
 Los conteos extraídos coinciden con la tabla resumen para las 26 secciones. Se resolvieron por contexto tres inconsistencias de numeración en el escaneo: dos filas del bloque 9 fueron reconocidas como sección 6 y una fila ubicada en el bloque 21 figura como sección 12.
 
 El archivo `data/pdf-green-spaces.csv` conserva página y confianza OCR para revisión humana. Antes de uso contractual conviene cotejar nombres y direcciones con la planilla digital original, ya que la fuente es una fotografía escaneada y algunas tildes o abreviaturas pueden no ser exactas.
+
+## Correccion de nombres oficiales
+
+Cuando se detecten nombres mal interpretados por OCR, cargar la correccion en `data/green-space-name-corrections.csv` usando el `source_key` del espacio. Luego ejecutar `npm run names:sql` y revisar `supabase/green_space_name_corrections.sql` antes de aplicarlo en Supabase.
+
+Este flujo actualiza solo `green_spaces.name`; no modifica coordenadas, controles, evidencias, proveedores ni observaciones.
