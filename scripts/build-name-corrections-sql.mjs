@@ -85,5 +85,10 @@ function parseCsv(value) {
 }
 
 function sql(value) {
-  return `'${value.replace(/'/g, "''")}'`;
+  const escaped = value.replace(/'/g, "''");
+  if (/^[\x20-\x7e]*$/.test(escaped)) return `'${escaped}'`;
+  // Emitir cadenas Unicode (U&'...') para que el SQL sea 100% ASCII y no se
+  // rompa si el archivo se abre o pega con la codificación equivocada.
+  const unicode = escaped.replace(/\\/g, "\\\\").replace(/[^\x20-\x7e]/g, (char) => `\\${char.codePointAt(0).toString(16).padStart(4, "0")}`);
+  return `U&'${unicode}'`;
 }

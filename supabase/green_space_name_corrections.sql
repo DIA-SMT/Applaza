@@ -2,84 +2,98 @@
 -- Generado desde data/green-space-name-corrections.csv.
 -- Revisa este archivo antes de ejecutarlo en Supabase.
 
-update public.green_spaces set name = 'Virgen de la Merced (Amalia)' where source_key = 'pdf-2026-06-30-001' and name = 'Virgen del a Merced(Amalia)'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'Antártida Argentina' where source_key = 'pdf-2026-06-30-002' and name = 'Antartida Argentina'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'Villa Amalia 2 - Boulevard Magallanes' where source_key = 'pdf-2026-06-30-004' and name = 'Villa Amalia2-Boulevard Magallanes'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'Juan Pablo II (del arte y cultura)' where source_key = 'pdf-2026-06-30-006' and name = 'Juan Pabloll(delarteycultura)'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'Alberto García Hamilton' where source_key = 'pdf-2026-06-30-007' and name = 'Alberto Garcia Hamilton'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'Capitán Candelaria' where source_key = 'pdf-2026-06-30-008' and name = 'Capitan Can dela ria'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'Francisco José Ponssa' where source_key = 'pdf-2026-06-30-009' and name = 'Francisco Jose Ponssa'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'José Sortheix' where source_key = 'pdf-2026-06-30-010' and name = 'Jose Sortheix'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'Juan Crisóstomo Méndez' where source_key = 'pdf-2026-06-30-011' and name = 'Juan Crisostomo Mendez'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'Dolores Córdoba de la Vega' where source_key = 'pdf-2026-06-30-012' and name = 'Dolores Cordoba del a Vega'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'Rev. Padre José Punta' where source_key = 'pdf-2026-06-30-014' and name = 'Rev.Padre Jose Punta'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'República de Bolivia' where source_key = 'pdf-2026-06-30-016' and name = 'Republicade Bolivia'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'SMATA I' where source_key = 'pdf-2026-06-30-017' and name = 'SMATAI'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'Capitán Medina' where source_key = 'pdf-2026-06-30-018' and name = 'Capitan Medina'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'M. M. de Güemes' where source_key = 'pdf-2026-06-30-030' and name = 'M.M.de Guemes'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'Lozano Muñoz' where source_key = 'pdf-2026-06-30-032' and name = 'Lozano Munoz'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'B° Blasco' where source_key = 'pdf-2026-06-30-033' and name = '8*Blasco'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'Alberto Rougés' where source_key = 'pdf-2026-06-30-036' and name = 'Alberto Rouges'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'César Cipolletti' where source_key = 'pdf-2026-06-30-077' and name = 'Cesar Cipolletti'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'María Auxiliadora' where source_key = 'pdf-2026-06-30-081' and name = 'Maria Auxiliadora'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'Barrancas del Salí B' where source_key = 'pdf-2026-06-30-082' and name = 'Barrancasdel Sali B'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'Vera de canal' where source_key = 'pdf-2026-06-30-083' and name = 'Veradecanal'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'B° San Martín' where source_key = 'pdf-2026-06-30-084' and name = 'BSan Martin'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'Int. Alfredo Guzmán' where source_key = 'pdf-2026-06-30-086' and name = 'Int.Alfredo Guzman'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'Int. Carlos María Torres' where source_key = 'pdf-2026-06-30-087' and name = 'Int.Carlos Maria Torres'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'Camino de Sirga' where source_key = 'pdf-2026-06-30-089' and name = 'Caminode Sirga'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'Panamá y José Hernández' where source_key = 'pdf-2026-06-30-090' and name = 'Panamay Jose Hernandez'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'C. de Fragata Pedro E. Giachino' where source_key = 'pdf-2026-06-30-091' and name = 'C.de Fragata Pedro E.Giachino'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'Gral. Lorenzo Vinter' where source_key = 'pdf-2026-06-30-092' and name = 'Gral.Lorenzo Vinter'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'Mons. Miguel de Andrea' where source_key = 'pdf-2026-06-30-093' and name = 'Mons.Miguel de Andrea'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'San Miguel Arcángel' where source_key = 'pdf-2026-06-30-095' and name = 'San Miguel Arcangel'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'Dr. F. Irrazabal' where source_key = 'pdf-2026-06-30-097' and name = 'Dr.F.lrrazabal'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'Santísima Trinidad' where source_key = 'pdf-2026-06-30-100' and name = 'Santisima Trinidad'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'Dr. Ángel Pisarello' where source_key = 'pdf-2026-06-30-102' and name = 'Dr.Angel Pisarello'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'Monumento al Alfabeto' where source_key = 'pdf-2026-06-30-103' and name = 'Monumentoal Alfabeto'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'Tte. B. Matienzo' where source_key = 'pdf-2026-06-30-104' and name = 'Tte.B.Matienzo'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'De la Libertad' where source_key = 'pdf-2026-06-30-108' and name = 'Dela Libertad'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'Miguel de Azcuénaga' where source_key = 'pdf-2026-06-30-110' and name = 'Miguelde Azcuenaga'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'Ing. Agr. José Ploper' where source_key = 'pdf-2026-06-30-111' and name = 'ing.Agr.Jose Ploper'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'Diego de Villarroel' where source_key = 'pdf-2026-06-30-112' and name = 'Diegode Villarroel'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'Alameda de la Victoria' where source_key = 'pdf-2026-06-30-119' and name = 'Alameda del a Victoria'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'José Padilla' where source_key = 'pdf-2026-06-30-121' and name = 'Jose Padilla'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'Ntra. Sra. del Valle' where source_key = 'pdf-2026-06-30-122' and name = 'Ntra.Sra.del Valle'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'B° Blasco II (CGT)' where source_key = 'pdf-2026-06-30-127' and name = 'BBlasco Il(CGT)'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'Ciudadela' where source_key = 'pdf-2026-06-30-130' and name = 'Ciuda del a'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'B° Blasco I (Las Rosas Sur) 3' where source_key = 'pdf-2026-06-30-133' and name = 'B*Blasco I(Las Rosas Sur)3'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'Barrancas del Salí A' where source_key = 'pdf-2026-06-30-137' and name = 'Barrancasdel Sali A'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'Adolfo de la Vega' where source_key = 'pdf-2026-06-30-138' and name = 'Adolfo del a Vega'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'Dr. César Carman' where source_key = 'pdf-2026-06-30-139' and name = 'Dr.Cesar Carman'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'Coop. Güemes' where source_key = 'pdf-2026-06-30-140' and name = 'Coop.Guemes'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'Sargento D. Juárez' where source_key = 'pdf-2026-06-30-141' and name = 'Sargento D.Juarez'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'Int. Gregorio de Zavaleta' where source_key = 'pdf-2026-06-30-142' and name = 'Int.Gregoriode Zavaleta'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'Jesús de la Divina Misericordia' where source_key = 'pdf-2026-06-30-143' and name = 'Jesus del a Divina Misericordia'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'Islas Malvinas' where source_key = 'pdf-2026-06-30-144' and name = 'islas Malvinas'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'Reina de la Paz' where source_key = 'pdf-2026-06-30-149' and name = 'Reina del a Paz'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'Dr. José Lucas Penna' where source_key = 'pdf-2026-06-30-154' and name = 'Dr.Jose Lucas Penna'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'Estados árabes' where source_key = 'pdf-2026-06-30-157' and name = 'Estadosarabes'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'América' where source_key = 'pdf-2026-06-30-162' and name = 'America'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'Zenón Santillán' where source_key = 'pdf-2026-06-30-164' and name = 'Zenon Santillan'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = '4 de Junio' where source_key = 'pdf-2026-06-30-165' and name = '4dejunio'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'Los Plátanos' where source_key = 'pdf-2026-06-30-166' and name = 'Los Platanos'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'Espacio verde' where source_key = 'pdf-2026-06-30-167' and name = 'Espacioverde'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'Int. Roberto Avellaneda' where source_key = 'pdf-2026-06-30-168' and name = 'Int.Roberto Avellaneda'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'Joaquín Morales Solá' where source_key = 'pdf-2026-06-30-174' and name = 'Joaquin Morales Sola'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = '1° de Mayo' where source_key = 'pdf-2026-06-30-180' and name = '1°de Mayo'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'Ing. Domingo Torres' where source_key = 'pdf-2026-06-30-181' and name = 'Ing.Domingo Torres'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'Virgen del Rosario de San Nicolás' where source_key = 'pdf-2026-06-30-188' and name = 'Virgendel Rosariode San Nicolas'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'Dr. Pedro Cossio Paz' where source_key = 'pdf-2026-06-30-189' and name = 'Dr.Pedro Cossio Paz'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = '25 de Mayo' where source_key = 'pdf-2026-06-30-190' and name = '25de Mayo'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'ATSA II' where source_key = 'pdf-2026-06-30-193' and name = 'ATSAII'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'V° Centenario' where source_key = 'pdf-2026-06-30-198' and name = 'v Centenario'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'René Favaloro' where source_key = 'pdf-2026-06-30-199' and name = 'Rene Favaloro'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'Las Américas' where source_key = 'pdf-2026-06-30-200' and name = 'Las Americas'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'B° Policial IV' where source_key = 'pdf-2026-06-30-201' and name = 'B*Policial IV'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'Juan Manuel de Rosas' where source_key = 'pdf-2026-06-30-203' and name = 'Juan Manuelde Rosas'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'Diagonal 90' where source_key = 'pdf-2026-06-30-206' and name = 'Diagonal90'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'Néstor Kirchner' where source_key = 'pdf-2026-06-30-209' and name = 'Nestor Kirchner'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'CANAL SUR' where source_key = 'pdf-2026-06-30-213' and name = 'CANALSUR'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'Cristóbal Colón' where source_key = 'pdf-2026-06-30-216' and name = 'Cristobal Colon'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'Dr. Ramón Domingo Auad' where source_key = 'pdf-2026-06-30-217' and name = 'Dr.Ramon Domingo Auad'; -- PDF original plazasInforme.pdf
-update public.green_spaces set name = 'Héroes de Malvinas' where source_key = 'pdf-2026-06-30-218' and name = 'Heroesde Malvinas'; -- PDF original plazasInforme.pdf
+update public.green_spaces set name = 'Virgen de la Merced (Amalia)' where source_key = 'pdf-2026-06-30-001'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = U&'Ant\00e1rtida Argentina' where source_key = 'pdf-2026-06-30-002'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = 'Villa Amalia 2 - Boulevard Magallanes' where source_key = 'pdf-2026-06-30-004'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = 'Juan Pablo II (del arte y cultura)' where source_key = 'pdf-2026-06-30-006'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = U&'Alberto Garc\00eda Hamilton' where source_key = 'pdf-2026-06-30-007'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = U&'Capit\00e1n Candelaria' where source_key = 'pdf-2026-06-30-008'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = U&'Francisco Jos\00e9 Ponssa' where source_key = 'pdf-2026-06-30-009'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = U&'Jos\00e9 Sortheix' where source_key = 'pdf-2026-06-30-010'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = U&'Juan Cris\00f3stomo M\00e9ndez' where source_key = 'pdf-2026-06-30-011'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = U&'Dolores C\00f3rdoba de la Vega' where source_key = 'pdf-2026-06-30-012'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = U&'Rev. Padre Jos\00e9 Punta' where source_key = 'pdf-2026-06-30-014'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = U&'Rep\00fablica de Bolivia' where source_key = 'pdf-2026-06-30-016'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = 'SMATA I' where source_key = 'pdf-2026-06-30-017'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = U&'Capit\00e1n Medina' where source_key = 'pdf-2026-06-30-018'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = U&'B\00b0 130 Viviendas' where source_key = 'pdf-2026-06-30-022'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = U&'Banda del R\00edo Sal\00ed' where source_key = 'pdf-2026-06-30-023'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = U&'San Expedito (C\00e1mpora)' where source_key = 'pdf-2026-06-30-026'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = 'III Centenario' where source_key = 'pdf-2026-06-30-027'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = U&'M. M. de G\00fcemes' where source_key = 'pdf-2026-06-30-030'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = U&'Lozano Mu\00f1oz' where source_key = 'pdf-2026-06-30-032'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = U&'B\00b0 Blasco' where source_key = 'pdf-2026-06-30-033'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = U&'Alberto Roug\00e9s' where source_key = 'pdf-2026-06-30-036'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = U&'C\00e9sar Cipolletti' where source_key = 'pdf-2026-06-30-077'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = U&'Mar\00eda Auxiliadora' where source_key = 'pdf-2026-06-30-081'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = U&'Barrancas del Sal\00ed B' where source_key = 'pdf-2026-06-30-082'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = 'Vera de canal' where source_key = 'pdf-2026-06-30-083'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = U&'B\00b0 San Mart\00edn' where source_key = 'pdf-2026-06-30-084'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = U&'Int. Alfredo Guzm\00e1n' where source_key = 'pdf-2026-06-30-086'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = U&'Int. Carlos Mar\00eda Torres' where source_key = 'pdf-2026-06-30-087'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = 'Camino de Sirga' where source_key = 'pdf-2026-06-30-089'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = U&'Panam\00e1 y Jos\00e9 Hern\00e1ndez' where source_key = 'pdf-2026-06-30-090'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = 'C. de Fragata Pedro E. Giachino' where source_key = 'pdf-2026-06-30-091'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = 'Gral. Lorenzo Vinter' where source_key = 'pdf-2026-06-30-092'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = 'Mons. Miguel de Andrea' where source_key = 'pdf-2026-06-30-093'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = U&'San Miguel Arc\00e1ngel' where source_key = 'pdf-2026-06-30-095'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = 'Gral. Manuel Belgrano' where source_key = 'pdf-2026-06-30-096'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = 'Dr. F. Irrazabal' where source_key = 'pdf-2026-06-30-097'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = U&'Sant\00edsima Trinidad' where source_key = 'pdf-2026-06-30-100'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = U&'Dr. \00c1ngel Pisarello' where source_key = 'pdf-2026-06-30-102'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = 'Monumento al Alfabeto' where source_key = 'pdf-2026-06-30-103'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = 'Tte. B. Matienzo' where source_key = 'pdf-2026-06-30-104'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = 'De la Libertad' where source_key = 'pdf-2026-06-30-108'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = U&'Eva Per\00f3n' where source_key = 'pdf-2026-06-30-109'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = U&'Miguel de Azcu\00e9naga' where source_key = 'pdf-2026-06-30-110'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = U&'Ing. Agr. Jos\00e9 Ploper' where source_key = 'pdf-2026-06-30-111'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = 'Diego de Villarroel' where source_key = 'pdf-2026-06-30-112'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = U&'Eva Per\00f3n' where source_key = 'pdf-2026-06-30-114'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = 'Dr. Pedro Ruiz Huidobro' where source_key = 'pdf-2026-06-30-115'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = U&'Nicol\00e1s Levalle (Petete)' where source_key = 'pdf-2026-06-30-116'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = 'Alameda de la Victoria' where source_key = 'pdf-2026-06-30-119'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = U&'Jos\00e9 Padilla' where source_key = 'pdf-2026-06-30-121'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = 'Ntra. Sra. del Valle' where source_key = 'pdf-2026-06-30-122'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = U&'Garc\00eda Lorca' where source_key = 'pdf-2026-06-30-125'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = U&'B\00b0 Blasco II (CGT)' where source_key = 'pdf-2026-06-30-127'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = 'Ciudadela' where source_key = 'pdf-2026-06-30-130'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = U&'B\00b0 Blasco I (Las Rosas Sur) 3' where source_key = 'pdf-2026-06-30-133'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = U&'Barrancas del Sal\00ed A' where source_key = 'pdf-2026-06-30-137'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = 'Adolfo de la Vega' where source_key = 'pdf-2026-06-30-138'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = U&'Dr. C\00e9sar Carman' where source_key = 'pdf-2026-06-30-139'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = U&'Coop. G\00fcemes' where source_key = 'pdf-2026-06-30-140'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = U&'Sargento D. Ju\00e1rez' where source_key = 'pdf-2026-06-30-141'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = 'Int. Gregorio de Zavaleta' where source_key = 'pdf-2026-06-30-142'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = U&'Jes\00fas de la Divina Misericordia' where source_key = 'pdf-2026-06-30-143'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = 'Islas Malvinas' where source_key = 'pdf-2026-06-30-144'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = 'Reina de la Paz' where source_key = 'pdf-2026-06-30-149'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = U&'Dr. Jos\00e9 Lucas Penna' where source_key = 'pdf-2026-06-30-154'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = U&'Estados \00e1rabes' where source_key = 'pdf-2026-06-30-157'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = U&'Am\00e9rica' where source_key = 'pdf-2026-06-30-162'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = U&'Zen\00f3n Santill\00e1n' where source_key = 'pdf-2026-06-30-164'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = '4 de junio' where source_key = 'pdf-2026-06-30-165'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = U&'Los Pl\00e1tanos' where source_key = 'pdf-2026-06-30-166'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = 'Espacio verde' where source_key = 'pdf-2026-06-30-167'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = 'Int. Roberto Avellaneda' where source_key = 'pdf-2026-06-30-168'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = U&'Joaqu\00edn Morales Sol\00e1' where source_key = 'pdf-2026-06-30-174'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = U&'1\00b0 de Mayo' where source_key = 'pdf-2026-06-30-180'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = 'Ing. Domingo Torres' where source_key = 'pdf-2026-06-30-181'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = 'Dr. William Ernest Cross' where source_key = 'pdf-2026-06-30-182'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = 'Enrique G. Hamilton' where source_key = 'pdf-2026-06-30-185'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = U&'Virgen del Rosario de San Nicol\00e1s' where source_key = 'pdf-2026-06-30-188'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = 'Dr. Pedro Cossio Paz' where source_key = 'pdf-2026-06-30-189'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = '25 de Mayo' where source_key = 'pdf-2026-06-30-190'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = 'ATSA II' where source_key = 'pdf-2026-06-30-193'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = U&'V\00b0 Centenario' where source_key = 'pdf-2026-06-30-198'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = U&'Ren\00e9 Favaloro' where source_key = 'pdf-2026-06-30-199'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = U&'Las Am\00e9ricas' where source_key = 'pdf-2026-06-30-200'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = U&'B\00b0 Policial IV' where source_key = 'pdf-2026-06-30-201'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = 'Juan Manuel de Rosas' where source_key = 'pdf-2026-06-30-203'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = 'Dr. Mario Molina' where source_key = 'pdf-2026-06-30-204'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = 'Diagonal 90' where source_key = 'pdf-2026-06-30-206'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = U&'N\00e9stor Kirchner' where source_key = 'pdf-2026-06-30-209'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = 'CANAL SUR' where source_key = 'pdf-2026-06-30-213'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = 'Dupuy (ex Navarro)' where source_key = 'pdf-2026-06-30-215'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = U&'Crist\00f3bal Col\00f3n' where source_key = 'pdf-2026-06-30-216'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = U&'Dr. Ram\00f3n Domingo Auad' where source_key = 'pdf-2026-06-30-217'; -- Padron oficial InformacionPlaza.pdf
+update public.green_spaces set name = U&'H\00e9roes de Malvinas' where source_key = 'pdf-2026-06-30-218'; -- Padron oficial InformacionPlaza.pdf
