@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
-import { Building2, Camera, Check, ChevronRight, ClipboardCheck, Eye, LayoutDashboard, LoaderCircle, LogOut, Map, Menu, MessageSquarePlus, Save, Trees, TriangleAlert, UsersRound } from "lucide-react";
+import { Building2, Camera, Check, ChevronRight, ClipboardCheck, Eye, LayoutDashboard, LoaderCircle, LogOut, Map, MapPin, Menu, MessageSquarePlus, Save, Search, Trees, TriangleAlert, UsersRound, X } from "lucide-react";
 import type { MaintenancePhoto, MaintenanceTask, Provider, SpaceRecord, UserProfile } from "@/types/domain";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
 import { photoTypeLabel } from "@/lib/photo-label";
@@ -11,8 +11,10 @@ import { AssistantChat } from "./assistant-chat";
 import { ControlRegister } from "./control-register";
 import { OperationalMap } from "./operational-map";
 import { PhotoUpload } from "./photo-upload";
+import { SpaceDetail } from "./space-detail";
 
 type View = "dashboard" | "map" | "control" | "audit";
+type MetricKey = "all" | "mapped" | "pending" | "evidence" | "providers";
 const DOCUMENT_SPACE_TOTAL = 218;
 type SupervisorObservation = {
   id: string;
@@ -30,12 +32,13 @@ export function DashboardView({ initialSpaces, providers, currentUser, dataError
   const [view, setView] = useState<View>(isAuditorOnly ? "audit" : "dashboard");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [spaces, setSpaces] = useState(initialSpaces);
+  const [locateSpaceId, setLocateSpaceId] = useState<string>();
   const stats = [
-    { label: "Espacios del documento", value: DOCUMENT_SPACE_TOTAL, icon: Trees, tone: "blue" },
-    { label: "Con ubicacion", value: spaces.filter((space) => space.latitude != null && space.longitude != null).length, icon: Map, tone: "cyan" },
-    { label: "Pendientes de ubicar", value: spaces.filter((space) => space.latitude == null || space.longitude == null).length, icon: TriangleAlert, tone: "red" },
-    { label: "Evidencias cargadas", value: spaces.reduce((total, space) => total + space.photos.length, 0), icon: ClipboardCheck, tone: "green" },
-    { label: "Cooperativas activas", value: providers.filter((provider) => provider.active).length, icon: UsersRound, tone: "purple" },
+    { key: "all" as const, label: "Espacios del documento", value: DOCUMENT_SPACE_TOTAL, icon: Trees, tone: "blue" },
+    { key: "mapped" as const, label: "Con ubicacion", value: spaces.filter((space) => space.latitude != null && space.longitude != null).length, icon: Map, tone: "cyan" },
+    { key: "pending" as const, label: "Pendientes de ubicar", value: spaces.filter((space) => space.latitude == null || space.longitude == null).length, icon: TriangleAlert, tone: "red" },
+    { key: "evidence" as const, label: "Evidencias cargadas", value: spaces.reduce((total, space) => total + space.photos.length, 0), icon: ClipboardCheck, tone: "green" },
+    { key: "providers" as const, label: "Cooperativas activas", value: providers.filter((provider) => provider.active).length, icon: UsersRound, tone: "purple" },
   ];
   const latestPhotos = spaces.flatMap((space) => space.photos.map((photo) => ({ ...photo, spaceName: space.name }))).sort((left, right) => right.created_at.localeCompare(left.created_at));
 
@@ -47,7 +50,14 @@ export function DashboardView({ initialSpaces, providers, currentUser, dataError
   function changeView(nextView: View) {
     if (nextView === "audit" && !canSeeAudit) return;
     if (isAuditorOnly && nextView !== "audit") return;
+    if (nextView !== "map") setLocateSpaceId(undefined);
     setView(nextView);
+    setMobileNavOpen(false);
+  }
+
+  function locateFromDashboard(space: SpaceRecord) {
+    setLocateSpaceId(space.id);
+    setView("map");
     setMobileNavOpen(false);
   }
 
@@ -81,10 +91,10 @@ export function DashboardView({ initialSpaces, providers, currentUser, dataError
       {view === "audit" && canSeeAudit
         ? <AuditDashboard spaces={spaces} providers={providers} currentUser={currentUser} />
         : view === "map"
-        ? <OperationalMap spaces={spaces} providers={providers} currentUser={currentUser} dataError={dataError} setSpaces={setSpaces} />
+        ? <OperationalMap spaces={spaces} providers={providers} currentUser={currentUser} dataError={dataError} setSpaces={setSpaces} locateSpaceId={locateSpaceId} />
         : view === "control"
           ? <ControlRegister providers={providers} spaces={spaces} />
-          : <Dashboard spaces={spaces} providers={providers} currentUser={currentUser} stats={stats} latestPhotos={latestPhotos} dataError={dataError} onPhoto={addPhoto} onOpenMap={() => changeView("map")} />}
+          : <Dashboard spaces={spaces} providers={providers} currentUser={currentUser} stats={stats} latestPhotos={latestPhotos} dataError={dataError} onPhoto={addPhoto} onOpenMap={() => changeView("map")} onUpdateSpace={(updated) => setSpaces((current) => current.map((space) => space.id === updated.id ? updated : space))} onLocateSpace={locateFromDashboard} />}
       <AssistantChat />
     </main>
   </div>;
@@ -123,35 +133,150 @@ function viewTitle(view: View) {
 
 function Dashboard({
   spaces,
+  providers,
   currentUser,
   stats,
   latestPhotos,
   dataError,
   onPhoto,
   onOpenMap,
+  onUpdateSpace,
+  onLocateSpace,
 }: {
   spaces: SpaceRecord[];
   providers: Provider[];
   currentUser: UserProfile;
-  stats: Array<{ label: string; value: number; icon: typeof Trees; tone: string }>;
+  stats: Array<{ key: MetricKey; label: string; value: number; icon: typeof Trees; tone: string }>;
   latestPhotos: Array<{ id: string; image_url: string; photo_type: string; spaceName: string }>;
   dataError: string | null;
   onPhoto: (photo: MaintenancePhoto, spaceId?: string, task?: MaintenanceTask) => void;
   onOpenMap: () => void;
+  onUpdateSpace: (space: SpaceRecord) => void;
+  onLocateSpace: (space: SpaceRecord) => void;
 }) {
+  const [activeMetric, setActiveMetric] = useState<MetricKey>("all");
+  const [selectedSpaceId, setSelectedSpaceId] = useState<string>();
+  const selectedSpace = spaces.find((space) => space.id === selectedSpaceId);
   const listedSpaces = [...spaces].sort((left, right) => left.name.localeCompare(right.name, "es")).slice(0, 6);
 
   return <div className="content dashboard">
     <div className="page-heading"><div><p>PADRON MUNICIPAL</p><h1>Estado general</h1><span>Seguimiento de espacios verdes cargados desde el documento.</span></div><button className="primary" onClick={onOpenMap}><Map size={17} />Abrir mapa</button></div>
     {dataError && <div className="dashboard-error"><TriangleAlert size={18} /><div><strong>No se pudieron actualizar los datos</strong><span>{dataError}</span></div></div>}
-    <div className="stats-grid">{stats.map(({ label, value, icon: Icon, tone }) => <article className="stat-card" key={label}><div className={`stat-icon ${tone}`}><Icon /></div><div><span>{label}</span><strong>{value}</strong></div></article>)}</div>
+    <div className="stats-grid">{stats.map(({ key, label, value, icon: Icon, tone }) => <button className={`stat-card ${activeMetric === key ? "active" : ""}`} key={label} onClick={() => setActiveMetric(key)}><div className={`stat-icon ${tone}`}><Icon /></div><div><span>{label}</span><strong>{value}</strong></div><ChevronRight size={16} /></button>)}</div>
+    <MetricDetailPanel metric={activeMetric} spaces={spaces} providers={providers} onOpenMap={onOpenMap} onSelectSpace={(space) => setSelectedSpaceId(space.id)} onLocateSpace={onLocateSpace} />
     <div className="dashboard-grid">
       <section className="card"><div className="card-title"><div><h2>Espacios cargados</h2><p>Primeros registros disponibles del documento</p></div><button onClick={onOpenMap}>Ver mapa <ChevronRight size={16} /></button></div>{listedSpaces.length ? <div className="task-list">{listedSpaces.map((space) => <button key={space.id} onClick={onOpenMap}><span className="space-dot" /><div><strong>{space.name}</strong><small>{space.provider?.name || "Sin cooperativa asignada"}</small></div><span className="space-section-label">{space.section_code ? `Seccion ${space.section_code}` : space.source_type || "Espacio"}</span><ChevronRight size={17} /></button>)}</div> : <p className="dashboard-empty">No hay espacios cargados.</p>}</section>
       <section className="card evidence-card"><div className="card-title"><div><h2>Cargar evidencia</h2><p>Foto tomada en campo y asociada al espacio verde</p></div><Camera size={20} /></div><PhotoUpload spaces={spaces} onUploaded={onPhoto} /></section>
       <SupervisorObservations spaces={spaces} currentUser={currentUser} />
       <section className="card"><div className="card-title"><div><h2>Ultimas evidencias</h2><p>Fotos cargadas recientemente</p></div><Camera size={20} /></div>{latestPhotos.length ? <div className="recent-photos">{latestPhotos.slice(0, 4).map((photo) => <figure key={photo.id}><Image src={photo.image_url} alt={photo.spaceName} width={320} height={180} unoptimized={photo.image_url.startsWith("blob:")} /><figcaption><strong>{photo.spaceName}</strong><span>{photoTypeLabel(photo.photo_type)}</span></figcaption></figure>)}</div> : <p className="dashboard-empty">No hay fotos cargadas.</p>}</section>
     </div>
+    {selectedSpace && <SpaceDetail space={selectedSpace} providers={providers} currentUser={currentUser} onClose={() => setSelectedSpaceId(undefined)} onPhoto={(photo) => onPhoto(photo)} onUpdate={onUpdateSpace} onRelocate={onLocateSpace} />}
   </div>;
+}
+
+function MetricDetailPanel({
+  metric,
+  spaces,
+  providers,
+  onOpenMap,
+  onSelectSpace,
+  onLocateSpace,
+}: {
+  metric: MetricKey;
+  spaces: SpaceRecord[];
+  providers: Provider[];
+  onOpenMap: () => void;
+  onSelectSpace: (space: SpaceRecord) => void;
+  onLocateSpace: (space: SpaceRecord) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [selectedProviderId, setSelectedProviderId] = useState<string>();
+  const activeProviders = providers.filter((provider) => provider.active);
+  const metricCopy = metricContent(metric);
+  const metricSpaces = useMemo(() => {
+    if (metric === "mapped") return spaces.filter((space) => space.latitude != null && space.longitude != null);
+    if (metric === "pending") return spaces.filter((space) => space.latitude == null || space.longitude == null);
+    if (metric === "evidence") return spaces.filter((space) => space.photos.length > 0);
+    if (metric === "providers" && selectedProviderId) return spaces.filter((space) => space.provider?.id === selectedProviderId);
+    return spaces;
+  }, [metric, selectedProviderId, spaces]);
+  const filteredSpaces = metricSpaces.filter((space) => {
+    const term = normalizeQuery(query);
+    const text = normalizeQuery([space.name, space.address, space.neighborhood, space.section_code, space.source_type, space.provider?.name].filter(Boolean).join(" "));
+    return !term || text.includes(term);
+  }).sort((left, right) => left.name.localeCompare(right.name, "es"));
+  const providerRows = activeProviders.map((provider) => {
+    const assigned = spaces.filter((space) => space.provider?.id === provider.id);
+    const pending = assigned.filter((space) => space.latitude == null || space.longitude == null).length;
+    return {
+      provider,
+      assigned,
+      pending,
+      mapped: assigned.length - pending,
+      photos: assigned.reduce((total, space) => total + space.photos.length, 0),
+      surface: assigned.reduce((total, space) => total + (space.surface_m2 ?? 0), 0),
+    };
+  }).sort((left, right) => right.pending - left.pending || left.provider.name.localeCompare(right.provider.name, "es"));
+  const selectedProvider = providerRows.find((row) => row.provider.id === selectedProviderId);
+
+  useEffect(() => {
+    setQuery("");
+    if (metric !== "providers") setSelectedProviderId(undefined);
+  }, [metric]);
+
+  return <section className="dashboard-metric-panel">
+    <div className="metric-panel-head">
+      <div>
+        <p>{metricCopy.eyebrow}</p>
+        <h2>{metricCopy.title}</h2>
+        <span>{metricCopy.description}</span>
+      </div>
+      <button onClick={onOpenMap}><Map size={16} />Abrir mapa operativo</button>
+    </div>
+
+    {metric === "providers" ? <div className="provider-summary-grid">
+      {providerRows.map((row) => <button key={row.provider.id} className={selectedProviderId === row.provider.id ? "active" : ""} onClick={() => setSelectedProviderId(row.provider.id)}>
+        <strong>{row.provider.name}</strong>
+        <span>{row.assigned.length} espacios · {row.mapped} ubicados · {row.pending} pendientes</span>
+        <small>{Math.round(row.surface).toLocaleString("es-AR")} m² · {row.photos} evidencias</small>
+      </button>)}
+    </div> : null}
+
+    <div className="metric-panel-tools">
+      <div className="metric-search"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={metric === "providers" && !selectedProvider ? "Seleccioná una cooperativa para ver sus espacios" : "Buscar por nombre, barrio, sección o cooperativa"} />{query && <button onClick={() => setQuery("")} aria-label="Limpiar búsqueda"><X size={14} /></button>}</div>
+      <span>{metric === "providers" && !selectedProvider ? `${providerRows.length} cooperativas` : `${filteredSpaces.length} resultados`}</span>
+    </div>
+
+    {metric === "providers" && !selectedProvider ? <p className="dashboard-empty compact">Seleccioná una cooperativa para ver sus espacios relacionados y modificar cada ficha.</p> : filteredSpaces.length ? <div className="metric-space-list">
+      {filteredSpaces.slice(0, 80).map((space) => <article key={space.id}>
+        <div className="metric-space-main">
+          <strong>{space.name}</strong>
+          <span>{space.address || space.neighborhood || space.source_type || "Sin referencia"}</span>
+          <small>{space.provider?.name ?? "Sin cooperativa"} · {space.section_code ? `Sección ${space.section_code}` : "Sin sección"} · {space.surface_m2 ? `${Math.round(space.surface_m2).toLocaleString("es-AR")} m²` : "Sin superficie"}</small>
+        </div>
+        <div className="metric-space-meta">
+          <span className={space.latitude != null && space.longitude != null ? "mapped" : "pending"}>{space.latitude != null && space.longitude != null ? "Ubicado" : "Pendiente"}</span>
+          <span>{space.photos.length} fotos</span>
+        </div>
+        <div className="metric-space-actions">
+          {space.latitude == null || space.longitude == null ? <button onClick={() => onLocateSpace(space)}><MapPin size={14} />Ubicar</button> : <button onClick={() => onOpenMap()}><Map size={14} />Ver mapa</button>}
+          <button onClick={() => onSelectSpace(space)}>Ver / editar</button>
+        </div>
+      </article>)}
+    </div> : <p className="dashboard-empty compact">No hay registros para este filtro.</p>}
+  </section>;
+}
+
+function metricContent(metric: MetricKey) {
+  if (metric === "mapped") return { eyebrow: "GEORREFERENCIADOS", title: "Espacios con ubicación", description: "Listado completo de registros que ya tienen coordenadas cargadas." };
+  if (metric === "pending") return { eyebrow: "ACCIÓN REQUERIDA", title: "Pendientes de ubicar", description: "Seleccioná un espacio para abrir el mapa y guardar su ubicación manual." };
+  if (metric === "evidence") return { eyebrow: "EVIDENCIAS", title: "Espacios con fotos cargadas", description: "Control de registros con evidencia fotográfica asociada." };
+  if (metric === "providers") return { eyebrow: "COOPERATIVAS", title: "Cooperativas activas", description: "Resumen por cooperativa y acceso a sus espacios asignados." };
+  return { eyebrow: "PADRÓN", title: "Espacios del documento", description: "Todos los espacios cargados desde el documento municipal." };
+}
+
+function normalizeQuery(value: string) {
+  return value.toLocaleLowerCase("es").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
 }
 
 function SupervisorObservations({ spaces, currentUser }: { spaces: SpaceRecord[]; currentUser: UserProfile }) {

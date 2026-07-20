@@ -22,7 +22,7 @@ const layerDefinitions = [
   { id: "observado", label: "Mantenimientos observados", group: "Operación", color: statusColors.observado },
 ] as const;
 
-export function OperationalMap({ spaces, providers, currentUser, dataError, setSpaces }: { spaces: SpaceRecord[]; providers: Provider[]; currentUser: UserProfile; dataError: string | null; setSpaces: Dispatch<SetStateAction<SpaceRecord[]>> }) {
+export function OperationalMap({ spaces, providers, currentUser, dataError, setSpaces, locateSpaceId }: { spaces: SpaceRecord[]; providers: Provider[]; currentUser: UserProfile; dataError: string | null; setSpaces: Dispatch<SetStateAction<SpaceRecord[]>>; locateSpaceId?: string }) {
   const [selectedId, setSelectedId] = useState<string>();
   const [query, setQuery] = useState(""); const [providerId, setProviderId] = useState("all"); const [status, setStatus] = useState("all"); const [type, setType] = useState("all"); const [neighborhood, setNeighborhood] = useState("all"); const [locationFilter, setLocationFilter] = useState("all");
   const [startDate, setStartDate] = useState(""); const [endDate, setEndDate] = useState("");
@@ -48,13 +48,25 @@ export function OperationalMap({ spaces, providers, currentUser, dataError, setS
 
   const selected = spaces.find((space) => space.id === selectedId);
   const mappedSpaces = filteredSpaces.filter((space) => space.latitude != null && space.longitude != null);
-  const pendingSpaces = spaces.filter((space) => space.latitude == null || space.longitude == null);
+  const pendingSpaces = useMemo(() => spaces.filter((space) => space.latitude == null || space.longitude == null), [spaces]);
   const mappedTotal = spaces.length - pendingSpaces.length;
   const searchResults = query.trim() ? filteredSpaces.slice(0, 7) : [];
   const pendingSpace = pendingSpaces[Math.min(pendingIndex, Math.max(0, pendingSpaces.length - 1))];
   const relocatingSpace = spaces.find((space) => space.id === relocatingId);
   const canEditLocations = currentUser.role === "admin" || currentUser.role === "supervisor" || currentUser.role === "inspector";
   const activeFilterCount = [providerId, status, type, neighborhood, locationFilter].filter((value) => value !== "all").length + Number(Boolean(query)) + Number(Boolean(startDate)) + Number(Boolean(endDate));
+
+  useEffect(() => {
+    if (!locateSpaceId || !canEditLocations) return;
+    const index = pendingSpaces.findIndex((space) => space.id === locateSpaceId);
+    if (index < 0) return;
+    setLocationMode(true);
+    setPendingIndex(index);
+    setRelocatingId(undefined);
+    setSelectedId(undefined);
+    setDraftLocation(undefined);
+    setLocationError("");
+  }, [locateSpaceId, canEditLocations, pendingSpaces]);
 
   useEffect(() => {
     const term = query.trim();
