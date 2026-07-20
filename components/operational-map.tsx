@@ -11,6 +11,7 @@ import { RelocationEditor } from "./relocation-editor";
 import { QuickAddEditor } from "./quick-add-editor";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
 import { isNetworkError, loadQueue, persistQueue, runPendingOp, type PendingOp } from "@/lib/offline-queue";
+import { countPhotoOutbox, flushPhotoOutbox, onPhotoOutboxChanged } from "@/lib/photo-outbox";
 
 const SpaceMap = dynamic(() => import("./space-map"), { ssr: false, loading: () => <div className="gis-map-loading"><i /><span>Cargando cartografía…</span></div> });
 
@@ -34,7 +35,7 @@ export function OperationalMap({ spaces, providers, currentUser, dataError, setS
   const [relocatingId, setRelocatingId] = useState<string>();
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number; accuracy: number }>(); const [geoBusy, setGeoBusy] = useState(false); const [geoError, setGeoError] = useState(""); const [draftFromGps, setDraftFromGps] = useState(false);
   const [quickAddOpen, setQuickAddOpen] = useState(false); const [quickAddBusy, setQuickAddBusy] = useState(false); const [quickAddError, setQuickAddError] = useState("");
-  const [syncQueue, setSyncQueue] = useState<PendingOp[]>([]); const [syncBusy, setSyncBusy] = useState(false); const [syncNotice, setSyncNotice] = useState("");
+  const [syncQueue, setSyncQueue] = useState<PendingOp[]>([]); const [syncBusy, setSyncBusy] = useState(false); const [syncNotice, setSyncNotice] = useState(""); const [pendingPhotos, setPendingPhotos] = useState(0);
   const syncQueueRef = useRef<PendingOp[]>([]); const syncBusyRef = useRef(false);
   const lastAutoSelectedQuery = useRef("");
 
@@ -42,10 +43,14 @@ export function OperationalMap({ spaces, providers, currentUser, dataError, setS
     const stored = loadQueue();
     syncQueueRef.current = stored;
     setSyncQueue(stored);
+    let active = true;
+    const refreshPhotos = () => { void countPhotoOutbox().then((count) => { if (active) setPendingPhotos(count); }); };
+    refreshPhotos();
+    const unsubscribe = onPhotoOutboxChanged(refreshPhotos);
     const onOnline = () => { void syncNow(); };
     window.addEventListener("online", onOnline);
-    if (stored.length && navigator.onLine) void syncNow();
-    return () => window.removeEventListener("online", onOnline);
+    if (navigator.onLine) void syncNow();
+    return () => { active = false; unsubscribe(); window.removeEventListener("online", onOnline); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -92,7 +97,8 @@ export function OperationalMap({ spaces, providers, currentUser, dataError, setS
   function setQueue(next: PendingOp[]) { syncQueueRef.current = next; setSyncQueue(next); persistQueue(next); }
   function enqueueOp(op: Omit<PendingOp, "id" | "queuedAt">) { setQueue([...syncQueueRef.current, { ...op, id: crypto.randomUUID(), queuedAt: new Date().toISOString() }]); }
   async function syncNow() {
-    if (syncBusyRef.current || !syncQueueRef.current.length) return;
+    if (syncBusyRef.current) return;
+    if (!syncQueueRef.current.length && !(await countPhotoOutbox())) return;
     const supabase = getSupabaseBrowserClient();
     if (!supabase) return;
     syncBusyRef.current = true; setSyncBusy(true); setSyncNotice("");
@@ -104,6 +110,9 @@ export function OperationalMap({ spaces, providers, currentUser, dataError, setS
       if (!result.ok && result.message) rejected.push(`${op.label}: ${result.message}`);
       setQueue(syncQueueRef.current.slice(1));
     }
+    const photoResult = await flushPhotoOutbox(supabase);
+    rejected.push(...photoResult.rejected);
+    setPendingPhotos(photoResult.remaining);
     syncBusyRef.current = false; setSyncBusy(false);
     if (rejected.length) setSyncNotice(`No se pudieron aplicar estos cambios: ${rejected.join(" · ")}`);
   }
@@ -216,7 +225,7 @@ export function OperationalMap({ spaces, providers, currentUser, dataError, setS
 
       <div className="gis-legend"><strong>Estado</strong>{(Object.keys(statusLabels) as MaintenanceStatus[]).map((value) => <span key={value}><i style={{ background: statusColors[value] }} />{statusLabels[value]}</span>)}</div>
       <div className="gis-map-counter">Mostrando <strong>{mappedSpaces.length}</strong> de {filteredSpaces.length} resultados</div>
-      {syncQueue.length > 0 && <div className="gis-sync-banner"><CloudOff size={14} /><span>{syncQueue.length === 1 ? "1 cambio sin sincronizar" : `${syncQueue.length} cambios sin sincronizar`}</span><button onClick={() => void syncNow()} disabled={syncBusy}>{syncBusy ? <LoaderCircle size={13} className="spin" /> : <RefreshCw size={13} />}Sincronizar ahora</button></div>}
+      {syncQueue.length + pendingPhotos > 0 && <div className="gis-sync-banner"><CloudOff size={14} /><span>{syncQueue.length + pendingPhotos === 1 ? "1 cambio sin sincronizar" : `${syncQueue.length + pendingPhotos} cambios sin sincronizar`}</span><button onClick={() => void syncNow()} disabled={syncBusy}>{syncBusy ? <LoaderCircle size={13} className="spin" /> : <RefreshCw size={13} />}Sincronizar ahora</button></div>}
       {syncNotice && <div className="gis-geo-toast" onClick={() => setSyncNotice("")}>{syncNotice}</div>}
 
       {dataError ? <div className="gis-state gis-error"><TriangleIcon /><strong>No pudimos cargar el mapa operativo</strong><span>{dataError}</span></div> : spaces.length === 0 ? <div className="gis-state"><Trees /><strong>Todavía no hay espacios verdes cargados</strong><span>Los registros aparecerán aquí cuando estén disponibles en Supabase.</span></div> : filteredSpaces.length === 0 ? <div className="gis-state"><Filter /><strong>No hay resultados para los filtros seleccionados</strong><button onClick={clearFilters}>Restablecer filtros</button></div> : mappedSpaces.length === 0 ? <div className="gis-state"><MapPin /><strong>Los resultados no tienen ubicación</strong><span>Podés asignarla desde el editor manual.</span></div> : null}
