@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
-import { Check, ChevronDown, Crosshair, Filter, Layers3, MapPin, RotateCcw, Search, SlidersHorizontal, Trees, X } from "lucide-react";
+import { Check, ChevronDown, Crosshair, Filter, Layers3, LoaderCircle, LocateFixed, MapPin, RotateCcw, Search, SlidersHorizontal, Trees, X } from "lucide-react";
 import type { MaintenancePhoto, MaintenanceStatus, Provider, SpaceRecord, UserProfile } from "@/types/domain";
 import { statusColors, statusLabels } from "./status-badge";
 import { SpaceDetail } from "./space-detail";
@@ -26,10 +26,11 @@ export function OperationalMap({ spaces, providers, currentUser, dataError, setS
   const [selectedId, setSelectedId] = useState<string>();
   const [query, setQuery] = useState(""); const [providerId, setProviderId] = useState("all"); const [status, setStatus] = useState("all"); const [type, setType] = useState("all"); const [neighborhood, setNeighborhood] = useState("all"); const [locationFilter, setLocationFilter] = useState("all");
   const [startDate, setStartDate] = useState(""); const [endDate, setEndDate] = useState("");
-  const [activeLayers, setActiveLayers] = useState(() => new Set(["plaza", "espacio_verde", "platabanda"]));
+  const [activeLayers, setActiveLayers] = useState(() => new Set<string>(layerDefinitions.map((layer) => layer.id)));
   const [layersOpen, setLayersOpen] = useState(true); const [filtersOpen, setFiltersOpen] = useState(false);
   const [locationMode, setLocationMode] = useState(false); const [pendingIndex, setPendingIndex] = useState(0); const [draftLocation, setDraftLocation] = useState<{ latitude: number; longitude: number }>(); const [locationBusy, setLocationBusy] = useState(false); const [locationError, setLocationError] = useState("");
   const [relocatingId, setRelocatingId] = useState<string>();
+  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number; accuracy: number }>(); const [geoBusy, setGeoBusy] = useState(false); const [geoError, setGeoError] = useState(""); const [draftFromGps, setDraftFromGps] = useState(false);
   const lastAutoSelectedQuery = useRef("");
 
   const neighborhoods = useMemo(() => Array.from(new Set(spaces.map((space) => space.neighborhood).filter(Boolean))).sort((a, b) => a.localeCompare(b, "es")), [spaces]);
@@ -40,7 +41,7 @@ export function OperationalMap({ spaces, providers, currentUser, dataError, setS
     const searchable = normalizeSearch([space.name, space.address, space.neighborhood, space.source_type, space.section_code, space.provider?.name, space.provider?.contact_name, space.source_key].filter(Boolean).join(" "));
     const matchesText = !term || searchable.includes(term);
     const typeLayerVisible = activeLayers.has(spaceLayerId(space));
-    const statusLayerVisible = true;
+    const statusLayerVisible = !layerDefinitions.some((layer) => layer.id === space.status) || activeLayers.has(space.status);
     const matchesLocation = locationFilter === "all" || (locationFilter === "mapped" ? space.latitude != null && space.longitude != null : space.latitude == null || space.longitude == null);
     const matchesDates = (!startDate || Boolean(task && task.end_date >= startDate)) && (!endDate || Boolean(task && task.start_date <= endDate));
     return matchesText && typeLayerVisible && statusLayerVisible && matchesLocation && (providerId === "all" || space.provider?.id === providerId) && (status === "all" || space.status === status) && (type === "all" || spaceLayerId(space) === type) && (neighborhood === "all" || space.neighborhood === neighborhood) && matchesDates;
@@ -54,6 +55,13 @@ export function OperationalMap({ spaces, providers, currentUser, dataError, setS
   const pendingSpace = pendingSpaces[Math.min(pendingIndex, Math.max(0, pendingSpaces.length - 1))];
   const relocatingSpace = spaces.find((space) => space.id === relocatingId);
   const canEditLocations = currentUser.role === "admin" || currentUser.role === "supervisor" || currentUser.role === "inspector";
+  const gpsWarning = draftFromGps && userLocation && userLocation.accuracy > 50 ? `La precisión del GPS es de ±${Math.round(userLocation.accuracy)} m. Ajustá el punto arrastrándolo en el mapa si no coincide con el lugar real.` : "";
+  const nearbySuggestions = useMemo(() => {
+    if (!userLocation) return [] as SpaceRecord[];
+    const nearNeighborhoods = new Set(spaces.filter((space) => space.latitude != null && space.longitude != null && space.neighborhood && distanceMeters(userLocation.latitude, userLocation.longitude, space.latitude, space.longitude) < 1200).map((space) => space.neighborhood));
+    if (!nearNeighborhoods.size) return [] as SpaceRecord[];
+    return spaces.filter((space) => (space.latitude == null || space.longitude == null) && space.neighborhood && nearNeighborhoods.has(space.neighborhood)).slice(0, 4);
+  }, [spaces, userLocation]);
   const activeFilterCount = [providerId, status, type, neighborhood, locationFilter].filter((value) => value !== "all").length + Number(Boolean(query)) + Number(Boolean(startDate)) + Number(Boolean(endDate));
 
   useEffect(() => {
@@ -73,6 +81,8 @@ export function OperationalMap({ spaces, providers, currentUser, dataError, setS
   async function saveLocation() { if (!pendingSpace || !draftLocation) return; setLocationBusy(true); setLocationError(""); const supabase = getSupabaseBrowserClient(); if (!supabase) { setLocationError("Supabase no está configurado."); setLocationBusy(false); return; } const { error } = await supabase.from("green_spaces").update({ latitude: draftLocation.latitude, longitude: draftLocation.longitude, geocoding_source: "Manual Applaza", geocoded_at: new Date().toISOString() }).eq("id", pendingSpace.id); if (error) { setLocationError(error.message); setLocationBusy(false); return; } setSpaces((current) => current.map((space) => space.id === pendingSpace.id ? { ...space, ...draftLocation } : space)); setDraftLocation(undefined); setLocationBusy(false); }
   async function saveRelocation() { if (!relocatingSpace || !draftLocation) return; setLocationBusy(true); setLocationError(""); const supabase = getSupabaseBrowserClient(); if (!supabase) { setLocationError("Supabase no está configurado."); setLocationBusy(false); return; } const { error } = await supabase.from("green_spaces").update({ latitude: draftLocation.latitude, longitude: draftLocation.longitude, geocoding_source: "Corrección manual Applaza", geocoded_at: new Date().toISOString() }).eq("id", relocatingSpace.id); if (error) { setLocationError(error.message); setLocationBusy(false); return; } setSpaces((current) => current.map((space) => space.id === relocatingSpace.id ? { ...space, ...draftLocation } : space)); setDraftLocation(undefined); setRelocatingId(undefined); setLocationBusy(false); }
   function beginRelocation(space: SpaceRecord) { setLocationMode(false); setRelocatingId(space.id); setSelectedId(undefined); setDraftLocation(undefined); setLocationError(""); }
+  function selectPendingSpace(space: SpaceRecord) { const nextIndex = pendingSpaces.findIndex((item) => item.id === space.id); if (nextIndex < 0) return; setPendingIndex(nextIndex); setDraftLocation(undefined); setLocationError(""); }
+  function locateUser(assignDraft: boolean) { if (typeof window !== "undefined" && !window.isSecureContext) { setGeoError("El navegador bloquea la ubicación porque la conexión no es segura. Entrá a la aplicación por https://."); return; } if (typeof navigator === "undefined" || !navigator.geolocation) { setGeoError("Este navegador no permite obtener la ubicación."); return; } setGeoBusy(true); setGeoError(""); navigator.geolocation.getCurrentPosition((position) => { const { latitude, longitude, accuracy } = position.coords; setUserLocation({ latitude, longitude, accuracy }); if (assignDraft) { setDraftLocation({ latitude, longitude }); setDraftFromGps(true); } setGeoBusy(false); }, (failure) => { setGeoBusy(false); setGeoError(failure.code === failure.PERMISSION_DENIED ? "Permiso de ubicación denegado. Activalo en la configuración del navegador." : "No pudimos obtener tu ubicación. Reintentá en unos segundos."); }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 15000 }); }
   function addPhoto(photo: MaintenancePhoto) { setSpaces((current) => current.map((space) => space.task?.id === photo.maintenance_task_id ? { ...space, photos: [photo, ...space.photos] } : space)); }
 
   return <section className="gis-workspace">
@@ -96,7 +106,10 @@ export function OperationalMap({ spaces, providers, currentUser, dataError, setS
     </div>
 
     <div className={`gis-map-stage ${locationMode || relocatingSpace ? "picking-location" : ""}`}>
-      <SpaceMap spaces={filteredSpaces} selected={selected} onSelect={(space) => !locationMode && !relocatingSpace && setSelectedId(space.id)} locationMode={locationMode || Boolean(relocatingSpace)} draftLocation={draftLocation} onLocationPick={(latitude, longitude) => setDraftLocation({ latitude, longitude })} markerColors={markerColors} />
+      <SpaceMap spaces={filteredSpaces} selected={selected} onSelect={(space) => !locationMode && !relocatingSpace && setSelectedId(space.id)} locationMode={locationMode || Boolean(relocatingSpace)} draftLocation={draftLocation} onLocationPick={(latitude, longitude) => { setDraftLocation({ latitude, longitude }); setDraftFromGps(false); }} markerColors={markerColors} userLocation={userLocation} />
+
+      {!locationMode && !relocatingSpace && <button className="gis-locate-fab" title="Centrar el mapa en mi ubicación" aria-label="Centrar el mapa en mi ubicación" disabled={geoBusy} onClick={() => locateUser(false)}>{geoBusy ? <LoaderCircle size={17} className="spin" /> : <LocateFixed size={17} />}</button>}
+      {geoError && !locationMode && !relocatingSpace && <div className="gis-geo-toast" onClick={() => setGeoError("")}>{geoError}</div>}
 
       {layersOpen && <aside className="gis-layers-panel"><div className="gis-panel-title"><div><span>CONTROL TERRITORIAL</span><strong>Capas operativas</strong></div><button onClick={() => setLayersOpen(false)}><X size={16} /></button></div>{["Espacios", "Operación"].map((group) => <section key={group}><h3>{group}</h3>{layerDefinitions.filter((layer) => layer.group === group).map((layer) => { const active = activeLayers.has(layer.id); return <button key={layer.id} className={active ? "active" : ""} onClick={() => toggleLayer(layer.id)}><i style={{ background: layer.color }} /> <span>{layer.label}<small>{layerCount(layer.id)} elementos</small></span><b>{active && <Check size={12} />}</b></button>; })}</section>)}<p className="gis-layer-note">Los puntos del mapa usan el color de su capa.</p><div className="gis-data-quality"><MapPin size={16} /><div><strong>{spaces.filter((space) => space.latitude != null).length} georreferenciados</strong><span>{pendingSpaces.length} pendientes de ubicación</span></div></div></aside>}
 
@@ -105,7 +118,7 @@ export function OperationalMap({ spaces, providers, currentUser, dataError, setS
 
       {dataError ? <div className="gis-state gis-error"><TriangleIcon /><strong>No pudimos cargar el mapa operativo</strong><span>{dataError}</span></div> : spaces.length === 0 ? <div className="gis-state"><Trees /><strong>Todavía no hay espacios verdes cargados</strong><span>Los registros aparecerán aquí cuando estén disponibles en Supabase.</span></div> : filteredSpaces.length === 0 ? <div className="gis-state"><Filter /><strong>No hay resultados para los filtros seleccionados</strong><button onClick={clearFilters}>Restablecer filtros</button></div> : mappedSpaces.length === 0 ? <div className="gis-state"><MapPin /><strong>Los resultados no tienen ubicación</strong><span>Podés asignarla desde el editor manual.</span></div> : null}
 
-      {relocatingSpace ? <RelocationEditor space={relocatingSpace} draft={draftLocation} busy={locationBusy} error={locationError} onSave={saveRelocation} onClose={() => { setRelocatingId(undefined); setDraftLocation(undefined); setLocationError(""); }} /> : locationMode && pendingSpace ? <LocationEditor space={pendingSpace} index={pendingIndex} total={pendingSpaces.length} draft={draftLocation} busy={locationBusy} error={locationError} onPrevious={() => movePending(-1)} onNext={() => movePending(1)} onSave={saveLocation} onClose={() => setLocationMode(false)} /> : selected && <SpaceDetail space={selected} providers={providers} currentUser={currentUser} onClose={() => setSelectedId(undefined)} onPhoto={addPhoto} onUpdate={(updated) => setSpaces((current) => current.map((space) => space.id === updated.id ? updated : space))} onRelocate={beginRelocation} />}
+      {relocatingSpace ? <RelocationEditor space={relocatingSpace} draft={draftLocation} busy={locationBusy} error={locationError} geoBusy={geoBusy} geoError={geoError} warning={gpsWarning} onUseMyLocation={() => locateUser(true)} onSave={saveRelocation} onClose={() => { setRelocatingId(undefined); setDraftLocation(undefined); setLocationError(""); }} /> : locationMode && pendingSpace ? <LocationEditor space={pendingSpace} index={pendingIndex} total={pendingSpaces.length} pendingSpaces={pendingSpaces} suggestions={nearbySuggestions} draft={draftLocation} busy={locationBusy} error={locationError} geoBusy={geoBusy} geoError={geoError} warning={gpsWarning} onPrevious={() => movePending(-1)} onNext={() => movePending(1)} onSelectSpace={selectPendingSpace} onUseMyLocation={() => locateUser(true)} onSave={saveLocation} onClose={() => setLocationMode(false)} /> : selected && <SpaceDetail space={selected} providers={providers} currentUser={currentUser} onClose={() => setSelectedId(undefined)} onPhoto={addPhoto} onUpdate={(updated) => setSpaces((current) => current.map((space) => space.id === updated.id ? updated : space))} onRelocate={beginRelocation} />}
     </div>
   </section>;
 }
@@ -121,6 +134,13 @@ function spaceLayerId(space: SpaceRecord) {
 
 function layerColor(id: string) {
   return layerDefinitions.find((layer) => layer.id === id)?.color ?? "#64748b";
+}
+
+function distanceMeters(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const rad = Math.PI / 180;
+  const x = (lon2 - lon1) * rad * Math.cos(((lat1 + lat2) / 2) * rad);
+  const y = (lat2 - lat1) * rad;
+  return Math.sqrt(x * x + y * y) * 6371000;
 }
 
 function normalizeSearch(value: string) {
