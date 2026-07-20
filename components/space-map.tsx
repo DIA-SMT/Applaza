@@ -28,7 +28,7 @@ function ClusterLayer({ clusters, markerColors }: { clusters: SpaceRecord[][]; m
   })}</>;
 }
 
-export default function SpaceMap({ spaces, selected, onSelect, locationMode = false, draftLocation, onLocationPick, markerColors, userLocation }: { spaces: SpaceRecord[]; selected?: SpaceRecord; onSelect: (space: SpaceRecord) => void; locationMode?: boolean; draftLocation?: { latitude: number; longitude: number }; onLocationPick?: (lat: number, lng: number) => void; markerColors?: Record<string, string>; userLocation?: { latitude: number; longitude: number; accuracy: number } }) {
+export default function SpaceMap({ spaces, selected, onSelect, locationMode = false, draftLocation, onLocationPick, markerColors, userLocation, onUserClick }: { spaces: SpaceRecord[]; selected?: SpaceRecord; onSelect: (space: SpaceRecord) => void; locationMode?: boolean; draftLocation?: { latitude: number; longitude: number }; onLocationPick?: (lat: number, lng: number) => void; markerColors?: Record<string, string>; userLocation?: { latitude: number; longitude: number; accuracy: number }; onUserClick?: () => void }) {
   const [zoom, setZoom] = useState(13);
   const draftIcon = useMemo(() => L.divIcon({ className: "map-draft-marker", html: "<i></i>", iconSize: [22, 22], iconAnchor: [11, 11] }), []);
   const { clusters, singles } = useMemo(() => {
@@ -50,8 +50,8 @@ export default function SpaceMap({ spaces, selected, onSelect, locationMode = fa
     <LocationPicker enabled={locationMode} onPick={onLocationPick} />
     <FlyToUser location={userLocation} />
     <ZoomWatcher onZoom={setZoom} />
-    {userLocation && <Circle center={[userLocation.latitude, userLocation.longitude]} radius={Math.max(userLocation.accuracy, 15)} pathOptions={{ color: "#0166ff", weight: 1, fillColor: "#0166ff", fillOpacity: .08 }} />}
-    {userLocation && <CircleMarker center={[userLocation.latitude, userLocation.longitude]} radius={7} pathOptions={{ color: "white", weight: 3, fillColor: "#0166ff", fillOpacity: 1 }}><Tooltip direction="top" offset={[0, -8]}>Tu ubicación</Tooltip></CircleMarker>}
+    {userLocation && <Circle center={[userLocation.latitude, userLocation.longitude]} radius={Math.max(userLocation.accuracy, 15)} pathOptions={{ color: "#06b6d4", weight: 1, fillColor: "#06b6d4", fillOpacity: .1 }} />}
+    {userLocation && <CircleMarker center={[userLocation.latitude, userLocation.longitude]} radius={8} pathOptions={{ color: "white", weight: 3, fillColor: "#06b6d4", fillOpacity: 1 }} eventHandlers={onUserClick ? { click: onUserClick } : undefined}><Tooltip direction="top" offset={[0, -8]}>{onUserClick ? <><strong>Tu ubicación</strong><br />Tocá para cargar un espacio acá</> : "Tu ubicación"}</Tooltip></CircleMarker>}
     <ClusterLayer clusters={clusters} markerColors={markerColors} />
     {singles.map((space) => <CircleMarker key={space.id} center={[space.latitude!, space.longitude!]} radius={selected?.id === space.id ? 12 : 9} pathOptions={{ color: "white", weight: 3, fillColor: markerColors?.[space.id] ?? "#64748b", fillOpacity: 1 }} eventHandlers={{ click: () => onSelect(space) }}>
       <Tooltip direction="top" offset={[0, -8]}><strong>{space.name}</strong><br />{space.source_type || space.type}</Tooltip>

@@ -1,15 +1,16 @@
 "use client";
 import { useState } from "react";
-import { Check, ChevronLeft, ChevronRight, LoaderCircle, LocateFixed, MapPin, Search, X } from "lucide-react";
+import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, LoaderCircle, LocateFixed, MapPin, Search, X } from "lucide-react";
 import type { SpaceRecord } from "@/types/domain";
 
 function normalizeSearch(value: string) { return value.toLocaleLowerCase("es").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ").trim(); }
 
 export function LocationEditor({ space, index, total, pendingSpaces, suggestions, draft, busy, error, geoBusy, geoError, warning, onPrevious, onNext, onSelectSpace, onUseMyLocation, onSave, onClose }: { space: SpaceRecord; index: number; total: number; pendingSpaces: SpaceRecord[]; suggestions: SpaceRecord[]; draft?: { latitude: number; longitude: number }; busy: boolean; error: string; geoBusy: boolean; geoError: string; warning: string; onPrevious: () => void; onNext: () => void; onSelectSpace: (space: SpaceRecord) => void; onUseMyLocation: () => void; onSave: () => void; onClose: () => void }) {
   const [search, setSearch] = useState("");
+  const [collapsed, setCollapsed] = useState(false);
   const term = normalizeSearch(search);
   const results = term ? pendingSpaces.filter((item) => normalizeSearch([item.name, item.address, item.neighborhood, item.source_type].filter(Boolean).join(" ")).includes(term)).slice(0, 6) : [];
-  return <aside className="location-editor"><div className="location-editor-head"><div><span>GEOREFERENCIACIÓN MANUAL</span><strong>{index + 1} de {total} pendientes</strong></div><button className="icon-button" onClick={onClose} aria-label="Cerrar"><X size={18} /></button></div><div className="location-editor-body">
+  return <aside className="location-editor"><div className="location-editor-head"><div><span>GEOREFERENCIACIÓN MANUAL</span><strong>{collapsed ? space.name : `${index + 1} de ${total} pendientes`}</strong></div><div className="location-editor-head-actions"><button className="icon-button" onClick={() => setCollapsed((value) => !value)} aria-label={collapsed ? "Expandir editor" : "Minimizar editor"}>{collapsed ? <ChevronUp size={16} /> : <ChevronDown size={16} />}</button><button className="icon-button" onClick={onClose} aria-label="Cerrar"><X size={18} /></button></div></div>{collapsed ? <div className="location-editor-mini"><span>{draft ? `${draft.latitude.toFixed(5)}, ${draft.longitude.toFixed(5)}` : "Tocá el mapa para marcar el punto"}</span><button disabled={!draft || busy} onClick={onSave}>{busy ? <LoaderCircle className="spin" size={14} /> : <Check size={14} />}Guardar</button></div> : <div className="location-editor-body">
     <div className="location-picker-search"><Search size={15} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar otro espacio pendiente…" />{search && <button onClick={() => setSearch("")} aria-label="Limpiar búsqueda"><X size={13} /></button>}
       {term && <div className="location-picker-results">{results.map((item) => <button key={item.id} onClick={() => { onSelectSpace(item); setSearch(""); }}><span>{item.name}</span><small>{item.address || item.neighborhood || item.source_type || "Sin referencia"}</small></button>)}{!results.length && <p>No hay pendientes que coincidan.</p>}</div>}
     </div>
@@ -23,5 +24,5 @@ export function LocationEditor({ space, index, total, pendingSpaces, suggestions
     {error && <p className="location-error">{error}</p>}
     <button className="save-location" disabled={!draft || busy} onClick={onSave}>{busy ? <LoaderCircle className="spin" /> : <Check />}Guardar ubicación</button>
     <div className="location-navigation"><button onClick={onPrevious}><ChevronLeft />Anterior</button><button onClick={onNext}>Omitir por ahora<ChevronRight /></button></div>
-  </div></aside>;
+  </div>}</aside>;
 }
