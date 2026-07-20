@@ -11,6 +11,7 @@ export function RelocationEditor({ space, draft, busy, error, geoBusy, geoError,
       <div className="coordinate-comparison"><div><small>Ubicación actual</small><strong>{space.latitude != null && space.longitude != null ? `${space.latitude.toFixed(6)}, ${space.longitude.toFixed(6)}` : "Sin coordenadas"}</strong></div><Crosshair size={17} /><div><small>Nueva ubicación</small><strong>{draft ? `${draft.latitude.toFixed(6)}, ${draft.longitude.toFixed(6)}` : "Seleccioná un punto"}</strong></div></div>
       <div className={`pick-instruction ${draft ? "ready" : ""}`}>{draft ? <Check /> : <Crosshair />}<div><strong>{draft ? "Nuevo punto seleccionado" : "Hacé clic en el mapa"}</strong><span>{draft ? "Revisá visualmente el punto antes de confirmar." : "Elegí el centro real del espacio según la dirección."}</span></div></div>
       <button className="use-my-location" disabled={geoBusy} onClick={onUseMyLocation}>{geoBusy ? <LoaderCircle className="spin" /> : <LocateFixed />}Usar mi ubicación actual</button>
+      {geoBusy && <p className="location-hint">Si el navegador pregunta por tu ubicación, elegí “Permitir”.</p>}
       {geoError && <p className="location-error">{geoError}</p>}
       {warning && <p className="location-warning">{warning}</p>}
       {error && <p className="location-error">{error}</p>}

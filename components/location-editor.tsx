@@ -17,6 +17,7 @@ export function LocationEditor({ space, index, total, pendingSpaces, suggestions
     <div className="location-space"><MapPin /><div><small>{space.source_type || space.type}</small><h2>{space.name}</h2><p>{space.address}</p><span>{space.neighborhood || "Barrio sin informar"} · Sección {space.section_code || "—"}</span></div></div>
     <div className={`pick-instruction ${draft ? "ready" : ""}`}>{draft ? <Check /> : <MapPin />}<div><strong>{draft ? "Punto seleccionado" : "Marcá el punto en el mapa"}</strong><span>{draft ? `${draft.latitude.toFixed(6)}, ${draft.longitude.toFixed(6)}` : "Hacé clic sobre el mapa o usá tu ubicación actual."}</span></div></div>
     <button className="use-my-location" disabled={geoBusy} onClick={onUseMyLocation}>{geoBusy ? <LoaderCircle className="spin" /> : <LocateFixed />}Usar mi ubicación actual</button>
+    {geoBusy && <p className="location-hint">Si el navegador pregunta por tu ubicación, elegí “Permitir”.</p>}
     {geoError && <p className="location-error">{geoError}</p>}
     {warning && <p className="location-warning">{warning}</p>}
     {error && <p className="location-error">{error}</p>}
