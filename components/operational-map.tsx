@@ -98,6 +98,17 @@ export function OperationalMap({ spaces, providers, currentUser, dataError, setS
     setSpaces((current) => [{ ...created, photos: [] }, ...current]);
     setQuickAddBusy(false); setQuickAddOpen(false); setSelectedId(created.id);
   }
+  async function linkQuickAdd(space: SpaceRecord) {
+    if (!userLocation) return;
+    setQuickAddBusy(true); setQuickAddError("");
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) { setQuickAddError("Supabase no está configurado."); setQuickAddBusy(false); return; }
+    const { latitude, longitude } = userLocation;
+    const { error } = await supabase.from("green_spaces").update({ latitude, longitude, geocoding_source: "GPS Applaza", geocoded_at: new Date().toISOString() }).eq("id", space.id);
+    if (error) { setQuickAddError(error.message); setQuickAddBusy(false); return; }
+    setSpaces((current) => current.map((item) => item.id === space.id ? { ...item, latitude, longitude } : item));
+    setQuickAddBusy(false); setQuickAddOpen(false); setSelectedId(space.id);
+  }
   async function locateUser(assignDraft: boolean, onLocated?: () => void) {
     if (typeof window !== "undefined" && !window.isSecureContext) { setGeoError("El navegador bloquea la ubicación porque la conexión no es segura. Entrá a la aplicación por https://."); return; }
     if (typeof navigator === "undefined" || !navigator.geolocation) { setGeoError("Este navegador no permite obtener la ubicación."); return; }
@@ -146,7 +157,7 @@ export function OperationalMap({ spaces, providers, currentUser, dataError, setS
 
       {dataError ? <div className="gis-state gis-error"><TriangleIcon /><strong>No pudimos cargar el mapa operativo</strong><span>{dataError}</span></div> : spaces.length === 0 ? <div className="gis-state"><Trees /><strong>Todavía no hay espacios verdes cargados</strong><span>Los registros aparecerán aquí cuando estén disponibles en Supabase.</span></div> : filteredSpaces.length === 0 ? <div className="gis-state"><Filter /><strong>No hay resultados para los filtros seleccionados</strong><button onClick={clearFilters}>Restablecer filtros</button></div> : mappedSpaces.length === 0 ? <div className="gis-state"><MapPin /><strong>Los resultados no tienen ubicación</strong><span>Podés asignarla desde el editor manual.</span></div> : null}
 
-      {quickAddOpen && userLocation ? <QuickAddEditor location={userLocation} busy={quickAddBusy} error={quickAddError} onSave={saveQuickAdd} onClose={() => setQuickAddOpen(false)} /> : relocatingSpace ? <RelocationEditor space={relocatingSpace} draft={draftLocation} busy={locationBusy} error={locationError} geoBusy={geoBusy} geoError={geoError} warning={gpsWarning} onUseMyLocation={() => locateUser(true)} onSave={saveRelocation} onClose={() => { setRelocatingId(undefined); setDraftLocation(undefined); setLocationError(""); }} /> : locationMode && pendingSpace ? <LocationEditor space={pendingSpace} index={pendingIndex} total={pendingSpaces.length} pendingSpaces={pendingSpaces} suggestions={nearbySuggestions} draft={draftLocation} busy={locationBusy} error={locationError} geoBusy={geoBusy} geoError={geoError} warning={gpsWarning} onPrevious={() => movePending(-1)} onNext={() => movePending(1)} onSelectSpace={selectPendingSpace} onUseMyLocation={() => locateUser(false, () => { setLocationMode(false); setDraftLocation(undefined); setQuickAddError(""); setQuickAddOpen(true); })} onSave={saveLocation} onClose={() => setLocationMode(false)} /> : selected && <SpaceDetail space={selected} providers={providers} currentUser={currentUser} onClose={() => setSelectedId(undefined)} onPhoto={addPhoto} onUpdate={(updated) => setSpaces((current) => current.map((space) => space.id === updated.id ? updated : space))} onRelocate={beginRelocation} />}
+      {quickAddOpen && userLocation ? <QuickAddEditor location={userLocation} pendingSpaces={pendingSpaces} busy={quickAddBusy} error={quickAddError} onSave={saveQuickAdd} onLink={linkQuickAdd} onClose={() => setQuickAddOpen(false)} /> : relocatingSpace ? <RelocationEditor space={relocatingSpace} draft={draftLocation} busy={locationBusy} error={locationError} geoBusy={geoBusy} geoError={geoError} warning={gpsWarning} onUseMyLocation={() => locateUser(true)} onSave={saveRelocation} onClose={() => { setRelocatingId(undefined); setDraftLocation(undefined); setLocationError(""); }} /> : locationMode && pendingSpace ? <LocationEditor space={pendingSpace} index={pendingIndex} total={pendingSpaces.length} pendingSpaces={pendingSpaces} suggestions={nearbySuggestions} draft={draftLocation} busy={locationBusy} error={locationError} geoBusy={geoBusy} geoError={geoError} warning={gpsWarning} onPrevious={() => movePending(-1)} onNext={() => movePending(1)} onSelectSpace={selectPendingSpace} onUseMyLocation={() => locateUser(false, () => { setLocationMode(false); setDraftLocation(undefined); setQuickAddError(""); setQuickAddOpen(true); })} onSave={saveLocation} onClose={() => setLocationMode(false)} /> : selected && <SpaceDetail space={selected} providers={providers} currentUser={currentUser} onClose={() => setSelectedId(undefined)} onPhoto={addPhoto} onUpdate={(updated) => setSpaces((current) => current.map((space) => space.id === updated.id ? updated : space))} onRelocate={beginRelocation} />}
     </div>
   </section>;
 }

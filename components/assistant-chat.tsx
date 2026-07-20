@@ -325,9 +325,10 @@ function downloadReportPdf(report: AssistantReport) {
     pages.push(content);
     y = height - margin;
     addRect(content, 0, height - 78, width, 78, "0.02 0.25 0.55");
-    addText(content, "MUNICIPALIDAD DE SAN MIGUEL DE TUCUMAN", margin, height - 32, 9, true, "1 1 1");
-    addText(content, clean(report.title), margin, height - 52, 17, true, "1 1 1");
-    addText(content, `Periodo: ${report.periodLabel} | Pagina ${page}`, margin, height - 68, 9, false, "0.86 0.93 1");
+    addText(content, "MUNICIPALIDAD DE SAN MIGUEL DE TUCUMAN", margin, height - 22, 8, true, "1 1 1");
+    addText(content, "DIRECCION DE INTELIGENCIA ARTIFICIAL", margin, height - 34, 8, true, "0.86 0.93 1");
+    addText(content, clean(report.title), margin, height - 54, 16, true, "1 1 1");
+    addText(content, `Periodo: ${report.periodLabel} | Pagina ${page}`, margin, height - 69, 9, false, "0.86 0.93 1");
     y = height - 102;
   }
 
@@ -360,7 +361,7 @@ function downloadReportPdf(report: AssistantReport) {
       ["Observaciones", String(report.summary?.observations ?? "-")],
       ["Evidencias", String(report.summary?.evidencePhotos ?? "-")],
       ["Sistema", "Applaza"],
-      ["Origen", "Migue IA"],
+      ["Emite", "Direccion de Inteligencia Artificial"],
     ]);
   }
   y -= 4;

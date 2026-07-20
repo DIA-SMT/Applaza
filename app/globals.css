@@ -73,3 +73,4 @@
 .quick-add-field{display:block;margin-bottom:11px;font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#647488}.quick-add-field input,.quick-add-field select{display:block;width:100%;margin-top:5px;border:1px solid #cddbea;border-radius:8px;padding:9px 11px;font-size:12px;color:var(--ink);background:#f9fbfe;outline:0}.quick-add-field input:focus,.quick-add-field select:focus{border-color:var(--brand-blue)}
 .assistant-launcher{touch-action:none}
 @media(max-width:760px){.location-editor{top:auto;bottom:0;left:0;right:0;max-height:62%}}
+.quick-add-matches>small{display:flex;align-items:center;gap:5px;color:#005acc;background:#f3f8ff}
