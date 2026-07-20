@@ -74,3 +74,7 @@
 .assistant-launcher{touch-action:none}
 @media(max-width:760px){.location-editor{top:auto;bottom:0;left:0;right:0;max-height:62%}}
 .quick-add-matches>small{display:flex;align-items:center;gap:5px;color:#005acc;background:#f3f8ff}
+.gis-sync-banner{position:absolute;z-index:665;top:52px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:9px;background:#b45309;color:#fff;border-radius:20px;padding:7px 8px 7px 13px;font-size:10px;font-weight:600;box-shadow:0 6px 18px #78350f45;white-space:nowrap}
+.gis-sync-banner button{border:0;background:#ffffff28;color:#fff;border-radius:14px;padding:5px 10px;font-size:10px;font-weight:700;display:flex;align-items:center;gap:5px;cursor:pointer}
+.gis-sync-banner button:disabled{opacity:.6}
+@media(max-width:760px){.gis-sync-banner{top:46px;max-width:calc(100% - 16px)}}

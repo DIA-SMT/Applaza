@@ -2,14 +2,15 @@
 
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
-import { Check, ChevronDown, Crosshair, Filter, Layers3, LoaderCircle, LocateFixed, MapPin, RotateCcw, Search, SlidersHorizontal, Trees, X } from "lucide-react";
-import type { GreenSpace, MaintenancePhoto, MaintenanceStatus, Provider, SpaceRecord, SpaceType, UserProfile } from "@/types/domain";
+import { Check, ChevronDown, CloudOff, Crosshair, Filter, Layers3, LoaderCircle, LocateFixed, MapPin, RefreshCw, RotateCcw, Search, SlidersHorizontal, Trees, X } from "lucide-react";
+import type { MaintenancePhoto, MaintenanceStatus, Provider, SpaceRecord, SpaceType, UserProfile } from "@/types/domain";
 import { statusColors, statusLabels } from "./status-badge";
 import { SpaceDetail } from "./space-detail";
 import { LocationEditor } from "./location-editor";
 import { RelocationEditor } from "./relocation-editor";
 import { QuickAddEditor } from "./quick-add-editor";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
+import { isNetworkError, loadQueue, persistQueue, runPendingOp, type PendingOp } from "@/lib/offline-queue";
 
 const SpaceMap = dynamic(() => import("./space-map"), { ssr: false, loading: () => <div className="gis-map-loading"><i /><span>Cargando cartografía…</span></div> });
 
@@ -33,7 +34,20 @@ export function OperationalMap({ spaces, providers, currentUser, dataError, setS
   const [relocatingId, setRelocatingId] = useState<string>();
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number; accuracy: number }>(); const [geoBusy, setGeoBusy] = useState(false); const [geoError, setGeoError] = useState(""); const [draftFromGps, setDraftFromGps] = useState(false);
   const [quickAddOpen, setQuickAddOpen] = useState(false); const [quickAddBusy, setQuickAddBusy] = useState(false); const [quickAddError, setQuickAddError] = useState("");
+  const [syncQueue, setSyncQueue] = useState<PendingOp[]>([]); const [syncBusy, setSyncBusy] = useState(false); const [syncNotice, setSyncNotice] = useState("");
+  const syncQueueRef = useRef<PendingOp[]>([]); const syncBusyRef = useRef(false);
   const lastAutoSelectedQuery = useRef("");
+
+  useEffect(() => {
+    const stored = loadQueue();
+    syncQueueRef.current = stored;
+    setSyncQueue(stored);
+    const onOnline = () => { void syncNow(); };
+    window.addEventListener("online", onOnline);
+    if (stored.length && navigator.onLine) void syncNow();
+    return () => window.removeEventListener("online", onOnline);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const neighborhoods = useMemo(() => Array.from(new Set(spaces.map((space) => space.neighborhood).filter(Boolean))).sort((a, b) => a.localeCompare(b, "es")), [spaces]);
   const markerColors = useMemo(() => Object.fromEntries(spaces.map((space) => [space.id, layerColor(spaceLayerId(space))])), [spaces]);
@@ -75,13 +89,55 @@ export function OperationalMap({ spaces, providers, currentUser, dataError, setS
     lastAutoSelectedQuery.current = term;
   }, [filteredSpaces, query]);
 
+  function setQueue(next: PendingOp[]) { syncQueueRef.current = next; setSyncQueue(next); persistQueue(next); }
+  function enqueueOp(op: Omit<PendingOp, "id" | "queuedAt">) { setQueue([...syncQueueRef.current, { ...op, id: crypto.randomUUID(), queuedAt: new Date().toISOString() }]); }
+  async function syncNow() {
+    if (syncBusyRef.current || !syncQueueRef.current.length) return;
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) return;
+    syncBusyRef.current = true; setSyncBusy(true); setSyncNotice("");
+    const rejected: string[] = [];
+    while (syncQueueRef.current.length) {
+      const op = syncQueueRef.current[0];
+      const result = await runPendingOp(supabase, op);
+      if (result.retry) break;
+      if (!result.ok && result.message) rejected.push(`${op.label}: ${result.message}`);
+      setQueue(syncQueueRef.current.slice(1));
+    }
+    syncBusyRef.current = false; setSyncBusy(false);
+    if (rejected.length) setSyncNotice(`No se pudieron aplicar estos cambios: ${rejected.join(" · ")}`);
+  }
   function layerCount(id: string) { return spaces.filter((space) => spaceLayerId(space) === id).length; }
   function toggleLayer(id: string) { setActiveLayers((current) => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next; }); }
   function clearFilters() { setQuery(""); setProviderId("all"); setStatus("all"); setType("all"); setNeighborhood("all"); setLocationFilter("all"); setStartDate(""); setEndDate(""); }
   function selectSearchResult(space: SpaceRecord) { setSelectedId(space.id); lastAutoSelectedQuery.current = query.trim(); }
   function movePending(direction: number) { if (!pendingSpaces.length) return; setPendingIndex((current) => (current + direction + pendingSpaces.length) % pendingSpaces.length); setDraftLocation(undefined); setLocationError(""); }
-  async function saveLocation() { if (!pendingSpace || !draftLocation) return; setLocationBusy(true); setLocationError(""); const supabase = getSupabaseBrowserClient(); if (!supabase) { setLocationError("Supabase no está configurado."); setLocationBusy(false); return; } const { error } = await supabase.from("green_spaces").update({ latitude: draftLocation.latitude, longitude: draftLocation.longitude, geocoding_source: "Manual Applaza", geocoded_at: new Date().toISOString() }).eq("id", pendingSpace.id); if (error) { setLocationError(error.message); setLocationBusy(false); return; } setSpaces((current) => current.map((space) => space.id === pendingSpace.id ? { ...space, ...draftLocation } : space)); setDraftLocation(undefined); setLocationBusy(false); }
-  async function saveRelocation() { if (!relocatingSpace || !draftLocation) return; setLocationBusy(true); setLocationError(""); const supabase = getSupabaseBrowserClient(); if (!supabase) { setLocationError("Supabase no está configurado."); setLocationBusy(false); return; } const { error } = await supabase.from("green_spaces").update({ latitude: draftLocation.latitude, longitude: draftLocation.longitude, geocoding_source: "Corrección manual Applaza", geocoded_at: new Date().toISOString() }).eq("id", relocatingSpace.id); if (error) { setLocationError(error.message); setLocationBusy(false); return; } setSpaces((current) => current.map((space) => space.id === relocatingSpace.id ? { ...space, ...draftLocation } : space)); setDraftLocation(undefined); setRelocatingId(undefined); setLocationBusy(false); }
+  async function saveLocation() {
+    if (!pendingSpace || !draftLocation) return;
+    setLocationBusy(true); setLocationError("");
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) { setLocationError("Supabase no está configurado."); setLocationBusy(false); return; }
+    const values = { latitude: draftLocation.latitude, longitude: draftLocation.longitude, geocoding_source: "Manual Applaza", geocoded_at: new Date().toISOString() };
+    const applyLocal = () => { setSpaces((current) => current.map((space) => space.id === pendingSpace.id ? { ...space, ...draftLocation } : space)); setDraftLocation(undefined); setLocationBusy(false); };
+    const queueIt = () => { enqueueOp({ kind: "update", match: pendingSpace.id, values, label: `Ubicación de ${pendingSpace.name}` }); applyLocal(); };
+    if (!navigator.onLine) { queueIt(); return; }
+    const { error } = await supabase.from("green_spaces").update(values).eq("id", pendingSpace.id);
+    if (error) { if (isNetworkError(error.message)) { queueIt(); return; } setLocationError(error.message); setLocationBusy(false); return; }
+    applyLocal();
+  }
+  async function saveRelocation() {
+    if (!relocatingSpace || !draftLocation) return;
+    setLocationBusy(true); setLocationError("");
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) { setLocationError("Supabase no está configurado."); setLocationBusy(false); return; }
+    const values = { latitude: draftLocation.latitude, longitude: draftLocation.longitude, geocoding_source: "Corrección manual Applaza", geocoded_at: new Date().toISOString() };
+    const applyLocal = () => { setSpaces((current) => current.map((space) => space.id === relocatingSpace.id ? { ...space, ...draftLocation } : space)); setDraftLocation(undefined); setRelocatingId(undefined); setLocationBusy(false); };
+    const queueIt = () => { enqueueOp({ kind: "update", match: relocatingSpace.id, values, label: `Reubicación de ${relocatingSpace.name}` }); applyLocal(); };
+    if (!navigator.onLine) { queueIt(); return; }
+    const { error } = await supabase.from("green_spaces").update(values).eq("id", relocatingSpace.id);
+    if (error) { if (isNetworkError(error.message)) { queueIt(); return; } setLocationError(error.message); setLocationBusy(false); return; }
+    applyLocal();
+  }
   function beginRelocation(space: SpaceRecord) { setLocationMode(false); setRelocatingId(space.id); setSelectedId(undefined); setDraftLocation(undefined); setLocationError(""); }
   function selectPendingSpace(space: SpaceRecord) { const nextIndex = pendingSpaces.findIndex((item) => item.id === space.id); if (nextIndex < 0) return; setPendingIndex(nextIndex); setDraftLocation(undefined); setLocationError(""); }
   function openQuickAdd() { if (!canEditLocations || !userLocation) return; setQuickAddOpen(true); setQuickAddError(""); setLocationMode(false); setRelocatingId(undefined); setSelectedId(undefined); setDraftLocation(undefined); }
@@ -91,12 +147,15 @@ export function OperationalMap({ spaces, providers, currentUser, dataError, setS
     const supabase = getSupabaseBrowserClient();
     if (!supabase) { setQuickAddError("Supabase no está configurado."); setQuickAddBusy(false); return; }
     const sourceTypeLabels: Record<SpaceType, string> = { plaza: "Plaza", espacio_verde: "Espacio verde", platabanda: "Platabanda" };
-    const record = { name: input.name, type: input.type, address: input.address || null, neighborhood: input.neighborhood || null, latitude: userLocation.latitude, longitude: userLocation.longitude, source_type: sourceTypeLabels[input.type], source_document: "Alta manual Applaza", source_key: `applaza-${crypto.randomUUID()}`, geocoding_source: "GPS Applaza", geocoded_at: new Date().toISOString() };
-    const { data, error } = await supabase.from("green_spaces").insert(record).select().single();
-    if (error) { setQuickAddError(/policy|permission|denied/i.test(error.message) ? "La base todavía no permite altas desde la app: hay que ejecutar supabase/staff_insert_spaces.sql en Supabase." : error.message); setQuickAddBusy(false); return; }
-    const created = data as GreenSpace;
-    setSpaces((current) => [{ ...created, photos: [] }, ...current]);
-    setQuickAddBusy(false); setQuickAddOpen(false); setSelectedId(created.id);
+    const nowIso = new Date().toISOString();
+    const record = { id: crypto.randomUUID(), name: input.name, type: input.type, address: input.address || null, neighborhood: input.neighborhood || null, latitude: userLocation.latitude, longitude: userLocation.longitude, source_type: sourceTypeLabels[input.type], source_document: "Alta manual Applaza", source_key: `applaza-${crypto.randomUUID()}`, geocoding_source: "GPS Applaza", geocoded_at: nowIso };
+    const localSpace: SpaceRecord = { id: record.id, name: record.name, type: input.type, address: input.address, neighborhood: input.neighborhood, latitude: record.latitude, longitude: record.longitude, status: "programado", created_at: nowIso, updated_at: nowIso, source_type: record.source_type, surface_m2: null, section_code: null, source_document: record.source_document, source_key: record.source_key, photos: [] };
+    const applyLocal = () => { setSpaces((current) => [localSpace, ...current]); setQuickAddBusy(false); setQuickAddOpen(false); setSelectedId(record.id); };
+    const queueIt = () => { enqueueOp({ kind: "insert", values: record, label: `Alta de ${record.name}` }); applyLocal(); };
+    if (!navigator.onLine) { queueIt(); return; }
+    const { error } = await supabase.from("green_spaces").insert(record);
+    if (error) { if (isNetworkError(error.message)) { queueIt(); return; } setQuickAddError(/policy|permission|denied/i.test(error.message) ? "La base todavía no permite altas desde la app: hay que ejecutar supabase/staff_insert_spaces.sql en Supabase." : error.message); setQuickAddBusy(false); return; }
+    applyLocal();
   }
   async function linkQuickAdd(space: SpaceRecord) {
     if (!userLocation) return;
@@ -104,10 +163,13 @@ export function OperationalMap({ spaces, providers, currentUser, dataError, setS
     const supabase = getSupabaseBrowserClient();
     if (!supabase) { setQuickAddError("Supabase no está configurado."); setQuickAddBusy(false); return; }
     const { latitude, longitude } = userLocation;
-    const { error } = await supabase.from("green_spaces").update({ latitude, longitude, geocoding_source: "GPS Applaza", geocoded_at: new Date().toISOString() }).eq("id", space.id);
-    if (error) { setQuickAddError(error.message); setQuickAddBusy(false); return; }
-    setSpaces((current) => current.map((item) => item.id === space.id ? { ...item, latitude, longitude } : item));
-    setQuickAddBusy(false); setQuickAddOpen(false); setSelectedId(space.id);
+    const values = { latitude, longitude, geocoding_source: "GPS Applaza", geocoded_at: new Date().toISOString() };
+    const applyLocal = () => { setSpaces((current) => current.map((item) => item.id === space.id ? { ...item, latitude, longitude } : item)); setQuickAddBusy(false); setQuickAddOpen(false); setSelectedId(space.id); };
+    const queueIt = () => { enqueueOp({ kind: "update", match: space.id, values, label: `Ubicación de ${space.name}` }); applyLocal(); };
+    if (!navigator.onLine) { queueIt(); return; }
+    const { error } = await supabase.from("green_spaces").update(values).eq("id", space.id);
+    if (error) { if (isNetworkError(error.message)) { queueIt(); return; } setQuickAddError(error.message); setQuickAddBusy(false); return; }
+    applyLocal();
   }
   async function locateUser(assignDraft: boolean, onLocated?: () => void) {
     if (typeof window !== "undefined" && !window.isSecureContext) { setGeoError("El navegador bloquea la ubicación porque la conexión no es segura. Entrá a la aplicación por https://."); return; }
@@ -154,6 +216,8 @@ export function OperationalMap({ spaces, providers, currentUser, dataError, setS
 
       <div className="gis-legend"><strong>Estado</strong>{(Object.keys(statusLabels) as MaintenanceStatus[]).map((value) => <span key={value}><i style={{ background: statusColors[value] }} />{statusLabels[value]}</span>)}</div>
       <div className="gis-map-counter">Mostrando <strong>{mappedSpaces.length}</strong> de {filteredSpaces.length} resultados</div>
+      {syncQueue.length > 0 && <div className="gis-sync-banner"><CloudOff size={14} /><span>{syncQueue.length === 1 ? "1 cambio sin sincronizar" : `${syncQueue.length} cambios sin sincronizar`}</span><button onClick={() => void syncNow()} disabled={syncBusy}>{syncBusy ? <LoaderCircle size={13} className="spin" /> : <RefreshCw size={13} />}Sincronizar ahora</button></div>}
+      {syncNotice && <div className="gis-geo-toast" onClick={() => setSyncNotice("")}>{syncNotice}</div>}
 
       {dataError ? <div className="gis-state gis-error"><TriangleIcon /><strong>No pudimos cargar el mapa operativo</strong><span>{dataError}</span></div> : spaces.length === 0 ? <div className="gis-state"><Trees /><strong>Todavía no hay espacios verdes cargados</strong><span>Los registros aparecerán aquí cuando estén disponibles en Supabase.</span></div> : filteredSpaces.length === 0 ? <div className="gis-state"><Filter /><strong>No hay resultados para los filtros seleccionados</strong><button onClick={clearFilters}>Restablecer filtros</button></div> : mappedSpaces.length === 0 ? <div className="gis-state"><MapPin /><strong>Los resultados no tienen ubicación</strong><span>Podés asignarla desde el editor manual.</span></div> : null}
 
