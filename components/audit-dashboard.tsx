@@ -591,10 +591,11 @@ function downloadAuditPdf({ filterTitle, month, period, report, currentUser }: {
     pageContents.push(content);
     y = height - margin;
     addPdfRect(content, 0, height - 78, width, 78, "0.02 0.25 0.55");
-    addPdfText(content, "MUNICIPALIDAD DE SAN MIGUEL DE TUCUMAN", margin, height - 32, 9, true, "1 1 1");
-    addPdfText(content, "Informe de auditoria de espacios verdes", margin, height - 52, 17, true, "1 1 1");
-    addPdfText(content, `${period} | ${filterTitle}`, margin, height - 68, 9, false, "0.86 0.93 1");
-    addPdfText(content, `Pagina ${pageIndex + 1}`, width - margin - 48, height - 32, 8, false, "0.86 0.93 1");
+    addPdfText(content, "MUNICIPALIDAD DE SAN MIGUEL DE TUCUMAN", margin, height - 22, 8, true, "1 1 1");
+    addPdfText(content, "DIRECCION DE INTELIGENCIA ARTIFICIAL", margin, height - 34, 8, true, "0.86 0.93 1");
+    addPdfText(content, "Informe de auditoria de espacios verdes", margin, height - 54, 16, true, "1 1 1");
+    addPdfText(content, `${period} | ${filterTitle}`, margin, height - 69, 9, false, "0.86 0.93 1");
+    addPdfText(content, `Pagina ${pageIndex + 1}`, width - margin - 48, height - 22, 8, false, "0.86 0.93 1");
     y = height - 102;
   }
 
@@ -711,10 +712,11 @@ function downloadObservationsPdf({ month, period, title, observations, currentUs
     pageContents.push(content);
     y = height - margin;
     addPdfRect(content, 0, height - 78, width, 78, "0.02 0.25 0.55");
-    addPdfText(content, "MUNICIPALIDAD DE SAN MIGUEL DE TUCUMAN", margin, height - 32, 9, true, "1 1 1");
-    addPdfText(content, "Informe de observaciones de supervision", margin, height - 52, 17, true, "1 1 1");
-    addPdfText(content, `${period} | ${title}`, margin, height - 68, 9, false, "0.86 0.93 1");
-    addPdfText(content, `Pagina ${pageIndex + 1}`, width - margin - 48, height - 32, 8, false, "0.86 0.93 1");
+    addPdfText(content, "MUNICIPALIDAD DE SAN MIGUEL DE TUCUMAN", margin, height - 22, 8, true, "1 1 1");
+    addPdfText(content, "DIRECCION DE INTELIGENCIA ARTIFICIAL", margin, height - 34, 8, true, "0.86 0.93 1");
+    addPdfText(content, "Informe de observaciones de supervision", margin, height - 54, 16, true, "1 1 1");
+    addPdfText(content, `${period} | ${title}`, margin, height - 69, 9, false, "0.86 0.93 1");
+    addPdfText(content, `Pagina ${pageIndex + 1}`, width - margin - 48, height - 22, 8, false, "0.86 0.93 1");
     y = height - 102;
   }
 
@@ -816,10 +818,11 @@ async function downloadEvidenceBookPdf({ month, period, report, currentUser }: {
     const content: string[] = [];
     pageContents.push(content);
     addPdfRect(content, 0, height - 78, width, 78, "0.02 0.25 0.55");
-    addPdfText(content, "MUNICIPALIDAD DE SAN MIGUEL DE TUCUMAN", margin, height - 32, 9, true, "1 1 1");
-    addPdfText(content, "Book fotografico de evidencias", margin, height - 52, 17, true, "1 1 1");
-    addPdfText(content, `${period} | ${report.title}`, margin, height - 68, 9, false, "0.86 0.93 1");
-    addPdfText(content, `Exportado: ${issuedAt} | ${currentUser.full_name}`, width - margin - 230, height - 32, 8, false, "0.86 0.93 1");
+    addPdfText(content, "MUNICIPALIDAD DE SAN MIGUEL DE TUCUMAN", margin, height - 22, 8, true, "1 1 1");
+    addPdfText(content, "DIRECCION DE INTELIGENCIA ARTIFICIAL", margin, height - 34, 8, true, "0.86 0.93 1");
+    addPdfText(content, "Book fotografico de evidencias", margin, height - 54, 16, true, "1 1 1");
+    addPdfText(content, `${period} | ${report.title}`, margin, height - 69, 9, false, "0.86 0.93 1");
+    addPdfText(content, `Exportado: ${issuedAt} | ${currentUser.full_name}`, width - margin - 230, height - 22, 8, false, "0.86 0.93 1");
 
     if (!group.length) {
       addPdfRect(content, margin, height - 168, width - margin * 2, 62, "0.96 0.98 1");
