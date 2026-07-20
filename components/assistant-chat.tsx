@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { FormEvent, ReactNode, useMemo, useRef, useState } from "react";
+import { FormEvent, PointerEvent as ReactPointerEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { BarChart3, Download, FileText, LoaderCircle, MapPin, Minimize2, Send, Sparkles, X } from "lucide-react";
 
 type ChatRole = "assistant" | "user";
@@ -85,6 +85,46 @@ export function AssistantChat() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const [bubblePosition, setBubblePosition] = useState<{ x: number; y: number }>();
+  const dragState = useRef<{ pointerId: number; startX: number; startY: number; originX: number; originY: number; moved: boolean }>(null);
+  const justDragged = useRef(false);
+
+  useEffect(() => {
+    try { const saved = localStorage.getItem("migue-bubble-position"); if (saved) setBubblePosition(clampBubble(JSON.parse(saved))); } catch { /* posición guardada inválida */ }
+  }, []);
+
+  function clampBubble(position: { x: number; y: number }) {
+    return { x: Math.min(Math.max(position.x, 8), window.innerWidth - 128), y: Math.min(Math.max(position.y, 8), window.innerHeight - 60) };
+  }
+
+  function onBubblePointerDown(event: ReactPointerEvent<HTMLButtonElement>) {
+    const rect = event.currentTarget.getBoundingClientRect();
+    dragState.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, originX: rect.left, originY: rect.top, moved: false };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function onBubblePointerMove(event: ReactPointerEvent<HTMLButtonElement>) {
+    const drag = dragState.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const deltaX = event.clientX - drag.startX; const deltaY = event.clientY - drag.startY;
+    if (!drag.moved && Math.hypot(deltaX, deltaY) < 6) return;
+    drag.moved = true;
+    setBubblePosition(clampBubble({ x: drag.originX + deltaX, y: drag.originY + deltaY }));
+  }
+
+  function onBubblePointerUp(event: ReactPointerEvent<HTMLButtonElement>) {
+    const drag = dragState.current;
+    dragState.current = null;
+    if (!drag?.moved) return;
+    justDragged.current = true;
+    const rect = event.currentTarget.getBoundingClientRect();
+    try { localStorage.setItem("migue-bubble-position", JSON.stringify({ x: rect.left, y: rect.top })); } catch { /* almacenamiento no disponible */ }
+  }
+
+  function onBubbleClick() {
+    if (justDragged.current) { justDragged.current = false; return; }
+    openChat();
+  }
 
   const lastUserQuestion = useMemo(() => [...messages].reverse().find((message) => message.role === "user")?.content, [messages]);
 
@@ -134,7 +174,7 @@ export function AssistantChat() {
   }
 
   return <>
-    {!open && <button className="assistant-launcher" onClick={() => openChat()} aria-label="Abrir Migue">
+    {!open && <button className="assistant-launcher" style={bubblePosition ? { left: bubblePosition.x, top: bubblePosition.y, right: "auto", bottom: "auto" } : undefined} onPointerDown={onBubblePointerDown} onPointerMove={onBubblePointerMove} onPointerUp={onBubblePointerUp} onPointerCancel={() => { dragState.current = null; }} onClick={onBubbleClick} aria-label="Abrir Migue">
       <Image src="/migue-avatar.png" alt="" width={42} height={42} />
       <span>Migue</span>
     </button>}
@@ -285,9 +325,10 @@ function downloadReportPdf(report: AssistantReport) {
     pages.push(content);
     y = height - margin;
     addRect(content, 0, height - 78, width, 78, "0.02 0.25 0.55");
-    addText(content, "MUNICIPALIDAD DE SAN MIGUEL DE TUCUMAN", margin, height - 32, 9, true, "1 1 1");
-    addText(content, clean(report.title), margin, height - 52, 17, true, "1 1 1");
-    addText(content, `Periodo: ${report.periodLabel} | Pagina ${page}`, margin, height - 68, 9, false, "0.86 0.93 1");
+    addText(content, "MUNICIPALIDAD DE SAN MIGUEL DE TUCUMAN", margin, height - 22, 8, true, "1 1 1");
+    addText(content, "DIRECCION DE INTELIGENCIA ARTIFICIAL", margin, height - 34, 8, true, "0.86 0.93 1");
+    addText(content, clean(report.title), margin, height - 54, 16, true, "1 1 1");
+    addText(content, `Periodo: ${report.periodLabel} | Pagina ${page}`, margin, height - 69, 9, false, "0.86 0.93 1");
     y = height - 102;
   }
 
@@ -320,7 +361,7 @@ function downloadReportPdf(report: AssistantReport) {
       ["Observaciones", String(report.summary?.observations ?? "-")],
       ["Evidencias", String(report.summary?.evidencePhotos ?? "-")],
       ["Sistema", "Applaza"],
-      ["Origen", "Migue IA"],
+      ["Emite", "Direccion de Inteligencia Artificial"],
     ]);
   }
   y -= 4;

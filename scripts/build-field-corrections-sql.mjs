@@ -1,40 +1,29 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-const inputPath = resolve("data/green-space-name-corrections.csv");
-const outputPath = resolve("supabase/green_space_name_corrections.sql");
+const inputPath = resolve("data/green-space-field-corrections.csv");
+const outputPath = resolve("supabase/green_space_field_corrections.sql");
 
-const rows = parseCsv(readFileSync(inputPath, "utf8"));
-const corrections = rows
-  .map((row) => ({
-    sourceKey: row.source_key?.trim(),
-    currentName: row.current_name?.trim(),
-    officialName: row.official_name?.trim(),
-    notes: row.notes?.trim(),
-  }))
-  .filter((row) => row.sourceKey && row.officialName);
+const rows = parseCsv(readFileSync(inputPath, "utf8"))
+  .map((row) => ({ sourceKey: row.source_key?.trim(), address: row.address?.trim(), neighborhood: row.neighborhood?.trim() }))
+  .filter((row) => row.sourceKey && (row.address || row.neighborhood));
 
 const statements = [
-  "-- Correcciones validadas de nombres del padron municipal.",
-  "-- Generado desde data/green-space-name-corrections.csv.",
+  "-- Direcciones y barrios oficiales del padron municipal (InformacionPlaza.pdf).",
+  "-- Generado desde data/green-space-field-corrections.csv con npm run fields:sql.",
   "-- Revisa este archivo antes de ejecutarlo en Supabase.",
   "",
 ];
 
-if (!corrections.length) {
-  statements.push("-- Sin correcciones cargadas.");
-} else {
-  corrections.forEach((row) => {
-    const guard = row.currentName ? ` and name = ${sql(row.currentName)}` : "";
-    const note = row.notes ? ` -- ${row.notes.replace(/\r?\n/g, " ")}` : "";
-    statements.push(
-      `update public.green_spaces set name = ${sql(row.officialName)} where source_key = ${sql(row.sourceKey)}${guard};${note}`,
-    );
-  });
+for (const row of rows) {
+  const sets = [];
+  if (row.address) sets.push(`address = ${sql(row.address)}`);
+  if (row.neighborhood) sets.push(`neighborhood = ${sql(row.neighborhood)}`);
+  statements.push(`update public.green_spaces set ${sets.join(", ")} where source_key = ${sql(row.sourceKey)};`);
 }
 
 writeFileSync(outputPath, `${statements.join("\n")}\n`);
-console.log(`Generated ${corrections.length} corrections in ${outputPath}`);
+console.log(`Generated ${rows.length} corrections in ${outputPath}`);
 
 function parseCsv(value) {
   const rows = [];
@@ -87,8 +76,8 @@ function parseCsv(value) {
 function sql(value) {
   const escaped = value.replace(/'/g, "''");
   if (/^[\x20-\x7e]*$/.test(escaped)) return `'${escaped}'`;
-  // Emitir cadenas Unicode (U&'...') para que el SQL sea 100% ASCII y no se
-  // rompa si el archivo se abre o pega con la codificación equivocada.
+  // Cadenas Unicode (U&'...') para que el SQL sea 100% ASCII y no se rompa
+  // si el archivo se abre o pega con la codificación equivocada.
   const unicode = escaped.replace(/\\/g, "\\\\").replace(/[^\x20-\x7e]/g, (char) => `\\${char.codePointAt(0).toString(16).padStart(4, "0")}`);
   return `U&'${unicode}'`;
 }

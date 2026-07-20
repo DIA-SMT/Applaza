@@ -8,6 +8,7 @@
     "typecheck": "tsc --noEmit --pretty false",
     "geocode": "node scripts/geocode-green-spaces.mjs",
     "names:sql": "node scripts/build-name-corrections-sql.mjs",
+    "fields:sql": "node scripts/build-field-corrections-sql.mjs",
     "start": "next start",
     "lint": "next lint"
   },

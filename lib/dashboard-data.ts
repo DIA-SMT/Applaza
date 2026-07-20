@@ -61,6 +61,7 @@ export async function getDashboardData(authenticatedClient?: SupabaseClient): Pr
 }
 
 function isDocumentSpace(space: GreenSpace) {
+  if (space.source_key?.startsWith("applaza-")) return true;
   const match = space.source_key?.match(/^pdf-2026-06-30-(\d+)$/);
   return Boolean(match && Number(match[1]) <= 218);
 }
