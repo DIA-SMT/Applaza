@@ -144,5 +144,6 @@
 .photo-lightbox-close{border:0;background:#eef3f9;color:#40546a;width:34px;height:34px;border-radius:9px;display:grid;place-items:center;cursor:pointer}
 .photo-lightbox-error{margin:0;padding:0 16px 14px;font-size:10px;color:#b91c1c}
 .photo-delete:focus-visible,.photo-delete-cancel:focus-visible,.photo-lightbox-close:focus-visible{outline:2px solid var(--brand-sky);outline-offset:2px}
-.assistant-launcher.snapping{transition:left .22s cubic-bezier(.2,.8,.3,1.1),top .22s ease-out}
-@media(prefers-reduced-motion:reduce){.assistant-launcher.snapping{transition:none}}
+.assistant-launcher.snapping{transition:left .5s cubic-bezier(.22,1.5,.36,1),top .32s ease-out;animation:migue-settle .5s cubic-bezier(.3,.7,.4,1)}
+@keyframes migue-settle{0%{transform:scale(1)}55%{transform:scaleX(1.1) scaleY(.92)}78%{transform:scaleX(.96) scaleY(1.04)}100%{transform:scale(1)}}
+@media(prefers-reduced-motion:reduce){.assistant-launcher.snapping{transition:none;animation:none}}

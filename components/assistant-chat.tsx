@@ -128,7 +128,7 @@ export function AssistantChat() {
     const snapped = snapToEdge({ x: bounds.left, y: bounds.top }, bounds.width);
     setBubblePosition(snapped);
     setBubbleSnapping(true);
-    window.setTimeout(() => setBubbleSnapping(false), 240);
+    window.setTimeout(() => setBubbleSnapping(false), 520);
     try { localStorage.setItem("migue-bubble-position", JSON.stringify(snapped)); } catch { /* almacenamiento no disponible */ }
   }
 
