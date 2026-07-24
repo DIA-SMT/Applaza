@@ -87,6 +87,7 @@ export function AssistantChat() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [bubblePosition, setBubblePosition] = useState<{ x: number; y: number }>();
   const [bubbleSnapping, setBubbleSnapping] = useState(false);
+  const [bubbleLeap, setBubbleLeap] = useState(false);
   const dragState = useRef<{ pointerId: number; startX: number; startY: number; originX: number; originY: number; moved: boolean }>(null);
   const justDragged = useRef(false);
 
@@ -126,9 +127,14 @@ export function AssistantChat() {
     justDragged.current = true;
     const bounds = event.currentTarget.getBoundingClientRect();
     const snapped = snapToEdge({ x: bounds.left, y: bounds.top }, bounds.width);
+    const middle = window.innerWidth / 2;
+    const startCenter = drag.originX + bounds.width / 2;
+    const endCenter = bounds.left + bounds.width / 2;
+    const leap = (startCenter < middle) !== (endCenter < middle) || Math.abs(endCenter - startCenter) > 200;
     setBubblePosition(snapped);
+    setBubbleLeap(leap);
     setBubbleSnapping(true);
-    window.setTimeout(() => setBubbleSnapping(false), 520);
+    window.setTimeout(() => { setBubbleSnapping(false); setBubbleLeap(false); }, leap ? 620 : 520);
     try { localStorage.setItem("migue-bubble-position", JSON.stringify(snapped)); } catch { /* almacenamiento no disponible */ }
   }
 
@@ -185,7 +191,7 @@ export function AssistantChat() {
   }
 
   return <>
-    {!open && <button className={`assistant-launcher ${bubbleSnapping ? "snapping" : ""}`} style={bubblePosition ? { left: bubblePosition.x, top: bubblePosition.y, right: "auto", bottom: "auto" } : undefined} onPointerDown={onBubblePointerDown} onPointerMove={onBubblePointerMove} onPointerUp={onBubblePointerUp} onPointerCancel={() => { dragState.current = null; }} onClick={onBubbleClick} aria-label="Abrir Migue">
+    {!open && <button className={`assistant-launcher ${bubbleSnapping ? "snapping" : ""} ${bubbleLeap ? "leap" : ""}`} style={bubblePosition ? { left: bubblePosition.x, top: bubblePosition.y, right: "auto", bottom: "auto" } : undefined} onPointerDown={onBubblePointerDown} onPointerMove={onBubblePointerMove} onPointerUp={onBubblePointerUp} onPointerCancel={() => { dragState.current = null; }} onClick={onBubbleClick} aria-label="Abrir Migue">
       <Image src="/migue-avatar.png" alt="" width={42} height={42} />
       <span>Migue</span>
     </button>}
