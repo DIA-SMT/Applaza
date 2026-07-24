@@ -92,3 +92,21 @@
 .evidence-filter button.active b{background:#ffffff2e;color:#fff}
 .evidence-filter button:focus-visible{outline:2px solid var(--brand-sky);outline-offset:2px}
 @media(prefers-reduced-motion:reduce){.evidence-filter button{transition:none}.evidence-filter button:active{transform:none}}
+.provider-rating{margin-top:16px;border:1px solid #d6e2ee;border-radius:12px;padding:16px;background:#f9fbfe;display:flex;flex-direction:column;gap:12px}
+.provider-rating-head{display:flex;flex-direction:column;gap:2px}.provider-rating-head strong{font-size:12px;color:var(--ink);text-transform:capitalize}.provider-rating-head span{font-size:10px;color:var(--muted)}
+.provider-rating-loading{display:flex;align-items:center;gap:7px;font-size:10px;color:var(--muted);margin:0}
+.provider-rating-toggle{display:flex;gap:10px}
+.provider-rating-toggle button{flex:1;border:1px solid #cddbea;background:#fff;color:#40546a;border-radius:10px;padding:11px;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:7px;cursor:pointer;transition:background .15s ease-out,color .15s ease-out,border-color .15s ease-out}
+.provider-rating-toggle button:active{transform:scale(.97)}
+.provider-rating-toggle button:focus-visible{outline:2px solid var(--brand-sky);outline-offset:2px}
+.provider-rating-toggle button.active.yes{background:#f0fdf4;border-color:#86c69a;color:#166534}
+.provider-rating-toggle button.active.no{background:#fef2f2;border-color:#fecaca;color:#b91c1c}
+.provider-rating-observation{display:flex;flex-direction:column;gap:6px;font-size:10px;font-weight:600;color:#40546a}
+.provider-rating-observation textarea{border:1px solid #cddbea;border-radius:9px;padding:9px 11px;font-size:11px;color:var(--ink);background:#fff;resize:vertical;font-family:inherit}
+.provider-rating-observation textarea:focus-visible{outline:2px solid var(--brand-sky);outline-offset:1px}
+.provider-rating-error{margin:0;font-size:9px;color:#b91c1c;background:#fef2f2;padding:8px;border-radius:6px}
+.provider-rating-saved{margin:0;display:flex;align-items:center;gap:5px;font-size:10px;color:#166534}
+.provider-rating-save{align-self:flex-start;border:0;background:linear-gradient(135deg,var(--brand-blue),var(--brand-sky));color:#fff;border-radius:9px;padding:10px 16px;font-size:11px;font-weight:700;display:flex;align-items:center;gap:7px;cursor:pointer}
+.provider-rating-save:disabled{opacity:.5}
+.provider-rating-save:active{transform:scale(.97)}
+@media(prefers-reduced-motion:reduce){.provider-rating-toggle button,.provider-rating-save{transition:none}.provider-rating-toggle button:active,.provider-rating-save:active{transform:none}}

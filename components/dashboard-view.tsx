@@ -11,6 +11,7 @@ import { AssistantChat } from "./assistant-chat";
 import { ControlRegister } from "./control-register";
 import { OperationalMap } from "./operational-map";
 import { PhotoUpload } from "./photo-upload";
+import { ProviderRating } from "./provider-rating";
 import { SpaceDetail } from "./space-detail";
 
 type View = "dashboard" | "map" | "control" | "audit";
@@ -250,6 +251,8 @@ function MetricDetailPanel({
         <small>{Math.round(row.surface).toLocaleString("es-AR")} m² · {row.photos} evidencias</small>
       </button>)}
     </div> : null}
+
+    {metric === "providers" && selectedProvider ? <ProviderRating provider={selectedProvider.provider} /> : null}
 
     <div className="metric-panel-tools">
       <div className="metric-search"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={metric === "providers" && !selectedProvider ? "Seleccioná una cooperativa para ver sus espacios" : "Buscar por nombre, barrio, sección o cooperativa"} />{query && <button onClick={() => setQuery("")} aria-label="Limpiar búsqueda"><X size={14} /></button>}</div>
