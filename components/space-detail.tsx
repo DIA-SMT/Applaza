@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
-import { CalendarDays, Crosshair, LoaderCircle, MapPin, Pencil, Save, UserRound, X } from "lucide-react";
+import { CalendarDays, Crosshair, LoaderCircle, MapPin, Pencil, Save, Trash2, UserRound, X } from "lucide-react";
 import type { Fulfilled, MaintenancePhoto, MaintenanceStatus, Provider, SpaceRecord, SpaceType, UserProfile } from "@/types/domain";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
 import { photoTypeLabel } from "@/lib/photo-label";
@@ -18,6 +18,32 @@ export function SpaceDetail({ space, providers, currentUser, onClose, onPhoto, o
   const [expanded, setExpanded] = useState(false); const [editing, setEditing] = useState(false); const [saving, setSaving] = useState(false); const [error, setError] = useState("");
   const [name, setName] = useState(space.name); const [spaceType, setSpaceType] = useState<SpaceType>(space.type); const [address, setAddress] = useState(space.address || ""); const [neighborhood, setNeighborhood] = useState(space.neighborhood || "");
   const [providerId, setProviderId] = useState(space.provider?.id || ""); const [status, setStatus] = useState<MaintenanceStatus>(space.status); const [startDate, setStartDate] = useState(space.task?.start_date || ""); const [endDate, setEndDate] = useState(space.task?.end_date || ""); const [fulfilled, setFulfilled] = useState<Fulfilled>(space.task?.fulfilled || "pendiente"); const [observations, setObservations] = useState(space.task?.observations || "");
+  const [viewerPhoto, setViewerPhoto] = useState<MaintenancePhoto>(); const [deleteConfirm, setDeleteConfirm] = useState(false); const [deleteBusy, setDeleteBusy] = useState(false); const [deleteError, setDeleteError] = useState("");
+  const canDeleteViewerPhoto = Boolean(viewerPhoto && !viewerPhoto.image_url.startsWith("blob:") && (currentUser.role === "admin" || currentUser.role === "supervisor" || currentUser.role === "auditor" || viewerPhoto.uploaded_by === currentUser.id));
+
+  useEffect(() => {
+    if (!viewerPhoto) return;
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") closeViewer(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewerPhoto]);
+
+  function openViewer(photo: MaintenancePhoto) { setViewerPhoto(photo); setDeleteConfirm(false); setDeleteError(""); }
+  function closeViewer() { if (deleteBusy) return; setViewerPhoto(undefined); setDeleteConfirm(false); setDeleteError(""); }
+  async function deleteViewerPhoto() {
+    if (!viewerPhoto) return;
+    setDeleteBusy(true); setDeleteError("");
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) { setDeleteError("Supabase no está configurado."); setDeleteBusy(false); return; }
+    const { error: deleteRowError } = await supabase.from("maintenance_photos").delete().eq("id", viewerPhoto.id);
+    if (deleteRowError) { setDeleteError(/policy|permission|denied|row-level/i.test(deleteRowError.message) ? "La base todavía no permite borrar evidencias: hay que ejecutar supabase/staff_delete_photos.sql en Supabase." : deleteRowError.message); setDeleteBusy(false); return; }
+    const marker = "/maintenance-photos/";
+    const markerIndex = viewerPhoto.image_url.indexOf(marker);
+    if (markerIndex >= 0) { const storagePath = decodeURIComponent(viewerPhoto.image_url.slice(markerIndex + marker.length).split("?")[0]); await supabase.storage.from("maintenance-photos").remove([storagePath]); }
+    onUpdate({ ...space, photos: space.photos.filter((photo) => photo.id !== viewerPhoto.id) });
+    setDeleteBusy(false); setDeleteConfirm(false); setViewerPhoto(undefined);
+  }
 
   function beginEdit() { setName(space.name); setSpaceType(space.type); setAddress(space.address || ""); setNeighborhood(space.neighborhood || ""); setProviderId(space.provider?.id || ""); setStatus(space.status); setStartDate(space.task?.start_date || ""); setEndDate(space.task?.end_date || ""); setFulfilled(space.task?.fulfilled || "pendiente"); setObservations(space.task?.observations || ""); setError(""); setEditing(true); }
   async function save() {
@@ -61,9 +87,29 @@ export function SpaceDetail({ space, providers, currentUser, onClose, onPhoto, o
         <button className="detail-expand" onClick={() => setExpanded((value) => !value)}>{expanded ? "Ocultar detalle" : "Ver detalle"}</button>
         {expanded && <div className="detail-metadata"><div><small>Identificador</small><strong>{space.id.slice(0, 8)}</strong></div><div><small>Coordenadas</small><strong>{space.latitude != null && space.longitude != null ? `${space.latitude.toFixed(5)}, ${space.longitude.toFixed(5)}` : "Sin ubicación"}</strong></div><div><small>Fuente</small><strong>{space.section_code ? `Padrón · Sección ${space.section_code}` : "Registro operativo"}</strong></div></div>}
         <section><h3>Observaciones</h3><p className="observations">{space.task?.observations || "Sin observaciones registradas."}</p></section>
-        <section><div className="section-title"><h3>Evidencias fotográficas</h3><span>{space.photos.length}</span></div>{space.photos.length ? <div className="photo-grid">{space.photos.map((photo) => <figure key={photo.id}><Image src={photo.image_url} alt={`Evidencia ${photoTypeLabel(photo.photo_type)}`} width={180} height={120} unoptimized={photo.image_url.startsWith("blob:")} /><figcaption>{photoTypeLabel(photo.photo_type)}</figcaption></figure>)}</div> : <p className="empty">Todavía no hay fotos asociadas.</p>}</section>
+        <section><div className="section-title"><h3>Evidencias fotográficas</h3><span>{space.photos.length}</span></div>{space.photos.length ? <div className="photo-grid">{space.photos.map((photo) => <figure key={photo.id}><button className="photo-thumb" onClick={() => openViewer(photo)} aria-label={`Ver evidencia ${photoTypeLabel(photo.photo_type)} en grande`}><Image src={photo.image_url} alt={`Evidencia ${photoTypeLabel(photo.photo_type)}`} width={180} height={120} unoptimized={photo.image_url.startsWith("blob:")} /></button><figcaption>{photoTypeLabel(photo.photo_type)}</figcaption></figure>)}</div> : <p className="empty">Todavía no hay fotos asociadas.</p>}</section>
         {space.task && <PhotoUpload taskId={space.task.id} spaceName={space.name} onUploaded={onPhoto} />}
       </>}
     </div>
+
+    {viewerPhoto && <div className="photo-lightbox" role="dialog" aria-modal="true" aria-label={`Evidencia de ${space.name}`} onClick={closeViewer}>
+      <div className="photo-lightbox-panel" onClick={(event) => event.stopPropagation()}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={viewerPhoto.image_url} alt={`${space.name} - ${photoTypeLabel(viewerPhoto.photo_type)}`} />
+        <div className="photo-lightbox-bar">
+          <div><strong>{space.name}</strong><span>{photoTypeLabel(viewerPhoto.photo_type)} · {date(viewerPhoto.created_at)}{viewerPhoto.image_url.startsWith("blob:") ? " · pendiente de sincronizar" : ""}</span></div>
+          <div className="photo-lightbox-actions">
+            {canDeleteViewerPhoto && !deleteConfirm && <button className="photo-delete" onClick={() => setDeleteConfirm(true)}><Trash2 size={15} />Eliminar</button>}
+            {canDeleteViewerPhoto && deleteConfirm && <>
+              <span className="photo-delete-confirm-label">¿Borrar esta foto? No se puede deshacer.</span>
+              <button className="photo-delete confirm" disabled={deleteBusy} onClick={() => void deleteViewerPhoto()}>{deleteBusy ? <LoaderCircle size={15} className="spin" /> : <Trash2 size={15} />}Borrar definitivamente</button>
+              <button className="photo-delete-cancel" disabled={deleteBusy} onClick={() => setDeleteConfirm(false)}>Cancelar</button>
+            </>}
+            <button className="photo-lightbox-close" onClick={closeViewer} aria-label="Cerrar visor"><X size={17} /></button>
+          </div>
+        </div>
+        {deleteError && <p className="photo-lightbox-error">{deleteError}</p>}
+      </div>
+    </div>}
   </aside>;
 }
