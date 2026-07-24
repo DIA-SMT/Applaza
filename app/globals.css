@@ -121,3 +121,8 @@
 .draft-points-list li>button:hover{background:#fef2f2}
 .draft-points-list li>button:focus-visible{outline:2px solid var(--brand-sky);outline-offset:1px}
 .map-draft-marker i{display:grid;place-items:center;font-style:normal;font-size:11px;font-weight:700;color:#12263f}
+.draft-point-reorder{display:flex;flex-direction:column;gap:2px;flex:none}
+.draft-point-reorder button{border:0;background:#f1f6fb;color:#40546a;display:grid;place-items:center;padding:2px 5px;border-radius:5px;cursor:pointer}
+.draft-point-reorder button:hover{background:#e3edf8}
+.draft-point-reorder button:disabled{opacity:.35;cursor:default}
+.draft-point-reorder button:focus-visible{outline:2px solid var(--brand-sky);outline-offset:1px}

@@ -34,6 +34,7 @@ type LocationEditorProps = {
   onSelectSpace: (space: SpaceRecord) => void;
   onAddGpsPoint: () => void;
   onRemovePoint: (index: number) => void;
+  onReorderPoint: (index: number, direction: number) => void;
   onUseMyLocation: () => void;
   onSave: () => void;
   onClose: () => void;
@@ -66,6 +67,7 @@ export function LocationEditor({
   onSelectSpace,
   onAddGpsPoint,
   onRemovePoint,
+  onReorderPoint,
   onUseMyLocation,
   onSave,
   onClose,
@@ -166,7 +168,7 @@ export function LocationEditor({
             </div>
           </div>
 
-          {isLinear && <DraftPointsList points={points} onRemovePoint={onRemovePoint} />}
+          {isLinear && <DraftPointsList points={points} onRemovePoint={onRemovePoint} onReorderPoint={onReorderPoint} />}
 
           <button className="use-my-location" disabled={geoBusy} onClick={isLinear ? onAddGpsPoint : onUseMyLocation}>
             {geoBusy ? <LoaderCircle className="spin" size={18} /> : <LocateFixed size={18} />}
