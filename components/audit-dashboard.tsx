@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { AlertCircle, CalendarDays, Camera, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Download, FileSearch, ListFilter, LoaderCircle, MessageSquarePlus, ShieldCheck, TriangleAlert } from "lucide-react";
+import { AlertCircle, CalendarDays, Camera, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Download, FileSearch, ListFilter, LoaderCircle, MessageSquarePlus, ShieldCheck, Trash2, TriangleAlert, X } from "lucide-react";
 import type { Provider, SpaceRecord, UserProfile } from "@/types/domain";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
 import { photoTypeLabel } from "@/lib/photo-label";
@@ -33,9 +33,10 @@ type AuditObservation = {
   created_at: string;
 };
 type AuditObservationItem = AuditObservation & { space?: SpaceRecord };
+type PhotoViewerItem = { id: string; url: string; type: string; createdAt: string; title: string; subtitle: string };
 const controlKeys = ["control_1", "control_2", "control_3"] as const;
 
-export function AuditDashboard({ spaces, providers, currentUser }: { spaces: SpaceRecord[]; providers: Provider[]; currentUser: UserProfile }) {
+export function AuditDashboard({ spaces, providers, currentUser, onPhotoDeleted }: { spaces: SpaceRecord[]; providers: Provider[]; currentUser: UserProfile; onPhotoDeleted?: (photoId: string) => void }) {
   const [month, setMonth] = useState(currentMonth());
   const [records, setRecords] = useState<ControlRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -46,6 +47,11 @@ export function AuditDashboard({ spaces, providers, currentUser }: { spaces: Spa
   const [observations, setObservations] = useState<AuditObservation[]>([]);
   const [observationsError, setObservationsError] = useState<string | null>(null);
   const [selectedEvidenceSpaceId, setSelectedEvidenceSpaceId] = useState("");
+  const [photoViewer, setPhotoViewer] = useState<PhotoViewerItem>();
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+  const canDeletePhotos = currentUser.role === "admin" || currentUser.role === "supervisor" || currentUser.role === "auditor";
 
   useEffect(() => {
     let active = true;
@@ -136,6 +142,51 @@ export function AuditDashboard({ spaces, providers, currentUser }: { spaces: Spa
   useEffect(() => {
     setSelectedEvidenceSpaceId("");
   }, [month, selectedProviderId, activeMetric]);
+
+  useEffect(() => {
+    if (!photoViewer) return;
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") closeViewer(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [photoViewer]);
+
+  function openPhoto(item: PhotoViewerItem) {
+    setPhotoViewer(item);
+    setDeleteConfirm(false);
+    setDeleteError("");
+  }
+
+  function closeViewer() {
+    if (deleteBusy) return;
+    setPhotoViewer(undefined);
+    setDeleteConfirm(false);
+    setDeleteError("");
+  }
+
+  async function deleteViewerPhoto() {
+    if (!photoViewer) return;
+    setDeleteBusy(true);
+    setDeleteError("");
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) { setDeleteError("Supabase no esta configurado."); setDeleteBusy(false); return; }
+    const { error: deleteRowError } = await supabase.from("maintenance_photos").delete().eq("id", photoViewer.id);
+    if (deleteRowError) {
+      setDeleteError(/policy|permission|denied|row-level/i.test(deleteRowError.message) ? "La base todavia no permite borrar evidencias: hay que ejecutar supabase/staff_delete_photos.sql en Supabase." : deleteRowError.message);
+      setDeleteBusy(false);
+      return;
+    }
+    const marker = "/maintenance-photos/";
+    const markerIndex = photoViewer.url.indexOf(marker);
+    if (markerIndex >= 0) {
+      const storagePath = decodeURIComponent(photoViewer.url.slice(markerIndex + marker.length).split("?")[0]);
+      await supabase.storage.from("maintenance-photos").remove([storagePath]);
+    }
+    onPhotoDeleted?.(photoViewer.id);
+    setDeleteBusy(false);
+    setDeleteConfirm(false);
+    setPhotoViewer(undefined);
+  }
 
   function changeMonth(direction: -1 | 1) {
     const date = new Date(`${month}-01T12:00:00`);
@@ -238,7 +289,7 @@ export function AuditDashboard({ spaces, providers, currentUser }: { spaces: Spa
           {activeMetric === "observed" ? (
             <AuditObservationReview items={observationItems} error={observationsError} />
           ) : activeMetric === "evidence" ? (
-            <EvidenceGallery spaces={reportView.spacesDetail} selectedId={selectedEvidenceSpaceId} onSelect={setSelectedEvidenceSpaceId} empty={reportView.empty} />
+            <EvidenceGallery spaces={reportView.spacesDetail} selectedId={selectedEvidenceSpaceId} onSelect={setSelectedEvidenceSpaceId} empty={reportView.empty} onOpenPhoto={openPhoto} />
           ) : (
             <div className="audit-space-list">
               {reportView.spacesDetail.map((space) => <article key={space.id} className={space.hasObservation ? "observed" : space.isReviewed ? "ready" : "pending"}>
@@ -285,7 +336,7 @@ export function AuditDashboard({ spaces, providers, currentUser }: { spaces: Spa
         </div>
         <span>{selectedProviderId === "all" ? "Todas" : report.title}</span>
       </div>
-      <RecentEvidenceList items={recentEvidence} />
+      <RecentEvidenceList items={recentEvidence} onOpenPhoto={openPhoto} />
     </section>
 
     <section className="audit-panel">
@@ -306,6 +357,25 @@ export function AuditDashboard({ spaces, providers, currentUser }: { spaces: Spa
         {!audit.activity.length && <p className="dashboard-empty">Todavia no hay registros guardados para este mes.</p>}
       </div>
     </section>
+
+    {photoViewer && <div className="photo-lightbox" role="dialog" aria-modal="true" aria-label={`Evidencia de ${photoViewer.title}`} onClick={closeViewer}>
+      <div className="photo-lightbox-panel" onClick={(event) => event.stopPropagation()}>
+        <img src={photoViewer.url} alt={`${photoViewer.title} - ${photoTypeLabel(photoViewer.type)}`} />
+        <div className="photo-lightbox-bar">
+          <div><strong>{photoViewer.title}</strong><span>{photoTypeLabel(photoViewer.type)} · {formatDate(photoViewer.createdAt)} {formatTime(photoViewer.createdAt)}{photoViewer.subtitle ? ` · ${photoViewer.subtitle}` : ""}</span></div>
+          <div className="photo-lightbox-actions">
+            {canDeletePhotos && !deleteConfirm && <button className="photo-delete" onClick={() => setDeleteConfirm(true)}><Trash2 size={15} />Eliminar</button>}
+            {canDeletePhotos && deleteConfirm && <>
+              <span className="photo-delete-confirm-label">¿Borrar esta foto? No se puede deshacer.</span>
+              <button className="photo-delete confirm" disabled={deleteBusy} onClick={() => void deleteViewerPhoto()}>{deleteBusy ? <LoaderCircle size={15} className="spin" /> : <Trash2 size={15} />}Borrar definitivamente</button>
+              <button className="photo-delete-cancel" disabled={deleteBusy} onClick={() => setDeleteConfirm(false)}>Cancelar</button>
+            </>}
+            <button className="photo-lightbox-close" onClick={closeViewer} aria-label="Cerrar visor"><X size={17} /></button>
+          </div>
+        </div>
+        {deleteError && <p className="photo-lightbox-error">{deleteError}</p>}
+      </div>
+    </div>}
   </div>;
 }
 
@@ -318,7 +388,7 @@ function AuditStat({ icon: Icon, label, value, note, tone = "default", active, o
   </button>;
 }
 
-function EvidenceGallery({ spaces, selectedId, onSelect, empty }: { spaces: ProviderRow["spacesDetail"]; selectedId: string; onSelect: (id: string) => void; empty: string }) {
+function EvidenceGallery({ spaces, selectedId, onSelect, empty, onOpenPhoto }: { spaces: ProviderRow["spacesDetail"]; selectedId: string; onSelect: (id: string) => void; empty: string; onOpenPhoto: (photo: PhotoViewerItem) => void }) {
   const selectedSpace = spaces.find((space) => space.id === selectedId) ?? spaces[0];
   const photoGroups = selectedSpace ? groupPhotosByDate(selectedSpace.photoItems) : [];
   const controlGroups = selectedSpace ? groupPhotosByControl(selectedSpace.photoItems) : [];
@@ -368,7 +438,9 @@ function EvidenceGallery({ spaces, selectedId, onSelect, empty }: { spaces: Prov
           </div>
           <div className="audit-photo-book-grid">
             {group.photos.map((photo) => <figure key={photo.id}>
-              <img src={photo.url} alt={`${selectedSpace.name} - ${photo.type}`} />
+              <button className="photo-thumb" onClick={() => onOpenPhoto({ id: photo.id, url: photo.url, type: photo.type, createdAt: photo.createdAt, title: selectedSpace.name, subtitle: selectedSpace.providerName || "" })} aria-label={`Ver foto de ${selectedSpace.name} en grande`}>
+                <img src={photo.url} alt={`${selectedSpace.name} - ${photo.type}`} />
+              </button>
               <figcaption>
                 <span>{photoTypeLabel(photo.type)}</span>
                 <time>{formatTime(photo.createdAt)}</time>
@@ -397,7 +469,7 @@ function AuditObservationReview({ items, error }: { items: Array<AuditObservatio
   </div>;
 }
 
-function RecentEvidenceList({ items }: { items: Array<{ id: string; image_url: string; photo_type: string; created_at: string; spaceName: string; providerName: string; neighborhood: string }> }) {
+function RecentEvidenceList({ items, onOpenPhoto }: { items: Array<{ id: string; image_url: string; photo_type: string; created_at: string; spaceName: string; providerName: string; neighborhood: string }>; onOpenPhoto: (photo: PhotoViewerItem) => void }) {
   if (!items.length) return <p className="dashboard-empty audit-evidence-empty">Todavia no hay evidencias cargadas para esta seleccion.</p>;
   const groups = groupPhotosByDate(items.map((photo) => ({
     id: photo.id,
@@ -418,7 +490,9 @@ function RecentEvidenceList({ items }: { items: Array<{ id: string; image_url: s
       </div>
       <div className="audit-recent-evidence-grid">
         {group.photos.map((photo) => <figure key={photo.id}>
-          <img src={photo.url} alt={photo.spaceName} />
+          <button className="photo-thumb" onClick={() => onOpenPhoto({ id: photo.id, url: photo.url, type: photo.type, createdAt: photo.createdAt, title: photo.spaceName, subtitle: photo.providerName })} aria-label={`Ver foto de ${photo.spaceName} en grande`}>
+            <img src={photo.url} alt={photo.spaceName} />
+          </button>
           <figcaption>
             <span>{photoTypeLabel(photo.type)}</span>
             <strong>{photo.spaceName}</strong>

@@ -90,7 +90,7 @@ export function DashboardView({ initialSpaces, providers, currentUser, dataError
         <div className="user"><span>{currentUser.full_name.slice(0, 2).toUpperCase()}</span><div><strong>{currentUser.full_name}</strong><small>{roleLabel(currentUser.role)}</small></div><button className="logout-button" onClick={signOut} title="Cerrar sesion"><LogOut size={17} /></button></div>
       </header>
       {view === "audit" && canSeeAudit
-        ? <AuditDashboard spaces={spaces} providers={providers} currentUser={currentUser} />
+        ? <AuditDashboard spaces={spaces} providers={providers} currentUser={currentUser} onPhotoDeleted={(photoId) => setSpaces((current) => current.map((space) => space.photos.some((photo) => photo.id === photoId) ? { ...space, photos: space.photos.filter((photo) => photo.id !== photoId) } : space))} />
         : view === "map"
         ? <OperationalMap spaces={spaces} providers={providers} currentUser={currentUser} dataError={dataError} setSpaces={setSpaces} locateSpaceId={locateSpaceId} />
         : view === "control"
