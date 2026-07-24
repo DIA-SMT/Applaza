@@ -1,8 +1,8 @@
 "use client";
 import L from "leaflet";
 import { useEffect, useMemo, useState } from "react";
-import { Circle, CircleMarker, MapContainer, Marker, ScaleControl, TileLayer, Tooltip, useMap, useMapEvents, ZoomControl } from "react-leaflet";
-import type { SpaceRecord } from "@/types/domain";
+import { Circle, CircleMarker, MapContainer, Marker, Polyline, ScaleControl, TileLayer, Tooltip, useMap, useMapEvents, ZoomControl } from "react-leaflet";
+import type { GeoPoint, SpaceRecord } from "@/types/domain";
 
 const CLUSTER_MAX_ZOOM = 14;
 const CLUSTER_MIN_SIZE = 3;
@@ -28,11 +28,12 @@ function ClusterLayer({ clusters, markerColors }: { clusters: SpaceRecord[][]; m
   })}</>;
 }
 
-export default function SpaceMap({ spaces, selected, onSelect, locationMode = false, draftLocation, onLocationPick, markerColors, userLocation, onUserClick }: { spaces: SpaceRecord[]; selected?: SpaceRecord; onSelect: (space: SpaceRecord) => void; locationMode?: boolean; draftLocation?: { latitude: number; longitude: number }; onLocationPick?: (lat: number, lng: number) => void; markerColors?: Record<string, string>; userLocation?: { latitude: number; longitude: number; accuracy: number }; onUserClick?: () => void }) {
+export default function SpaceMap({ spaces, selected, onSelect, locationMode = false, draftPoints = [], onLocationPick, onDraftMove, markerColors, userLocation, onUserClick }: { spaces: SpaceRecord[]; selected?: SpaceRecord; onSelect: (space: SpaceRecord) => void; locationMode?: boolean; draftPoints?: GeoPoint[]; onLocationPick?: (lat: number, lng: number) => void; onDraftMove?: (index: number, lat: number, lng: number) => void; markerColors?: Record<string, string>; userLocation?: { latitude: number; longitude: number; accuracy: number }; onUserClick?: () => void }) {
   const [zoom, setZoom] = useState(13);
-  const draftIcon = useMemo(() => L.divIcon({ className: "map-draft-marker", html: "<i></i>", iconSize: [22, 22], iconAnchor: [11, 11] }), []);
+  const pathSpaces = useMemo(() => spaces.filter((space) => (space.path?.length ?? 0) >= 2), [spaces]);
+  const pathSpaceIds = useMemo(() => new Set(pathSpaces.map((space) => space.id)), [pathSpaces]);
   const { clusters, singles } = useMemo(() => {
-    const mapped = spaces.filter((space) => space.latitude != null && space.longitude != null);
+    const mapped = spaces.filter((space) => space.latitude != null && space.longitude != null && !pathSpaceIds.has(space.id));
     if (zoom >= CLUSTER_MAX_ZOOM) return { clusters: [] as SpaceRecord[][], singles: mapped };
     const cell = (80 / 256) * (360 / Math.pow(2, zoom));
     const buckets = new Map<string, SpaceRecord[]>();
@@ -40,7 +41,7 @@ export default function SpaceMap({ spaces, selected, onSelect, locationMode = fa
     const clusters: SpaceRecord[][] = []; const singles: SpaceRecord[] = [];
     for (const group of buckets.values()) { if (group.length >= CLUSTER_MIN_SIZE) clusters.push(group); else singles.push(...group); }
     return { clusters, singles };
-  }, [spaces, zoom]);
+  }, [spaces, zoom, pathSpaceIds]);
   return <MapContainer center={[-26.8304, -65.2145]} zoom={13} className="map" zoomControl={false}>
     <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>' url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" />
     <Recenter selected={selected} />
@@ -52,10 +53,14 @@ export default function SpaceMap({ spaces, selected, onSelect, locationMode = fa
     <ZoomWatcher onZoom={setZoom} />
     {userLocation && <Circle center={[userLocation.latitude, userLocation.longitude]} radius={Math.max(userLocation.accuracy, 15)} pathOptions={{ color: "#06b6d4", weight: 1, fillColor: "#06b6d4", fillOpacity: .1 }} />}
     {userLocation && <CircleMarker center={[userLocation.latitude, userLocation.longitude]} radius={8} pathOptions={{ color: "white", weight: 3, fillColor: "#06b6d4", fillOpacity: 1 }} eventHandlers={onUserClick ? { click: onUserClick } : undefined}><Tooltip direction="top" offset={[0, -8]}>{onUserClick ? <><strong>Tu ubicación</strong><br />Tocá para cargar un espacio acá</> : "Tu ubicación"}</Tooltip></CircleMarker>}
+    {pathSpaces.map((space) => <Polyline key={`path-${space.id}`} positions={space.path!.map((point) => [point.latitude, point.longitude] as [number, number])} pathOptions={{ color: markerColors?.[space.id] ?? "#94a3b8", weight: selected?.id === space.id ? 8 : 6, opacity: .92, lineCap: "round" }} eventHandlers={{ click: () => onSelect(space) }}>
+      <Tooltip direction="top" sticky><strong>{space.name}</strong><br />{space.source_type || space.type}</Tooltip>
+    </Polyline>)}
     <ClusterLayer clusters={clusters} markerColors={markerColors} />
     {singles.map((space) => <CircleMarker key={space.id} center={[space.latitude!, space.longitude!]} radius={selected?.id === space.id ? 12 : 9} pathOptions={{ color: "white", weight: 3, fillColor: markerColors?.[space.id] ?? "#64748b", fillOpacity: 1 }} eventHandlers={{ click: () => onSelect(space) }}>
       <Tooltip direction="top" offset={[0, -8]}><strong>{space.name}</strong><br />{space.source_type || space.type}</Tooltip>
     </CircleMarker>)}
-    {draftLocation && <Marker position={[draftLocation.latitude, draftLocation.longitude]} icon={draftIcon} draggable eventHandlers={{ dragend: (event) => { const point = (event.target as L.Marker).getLatLng(); onLocationPick?.(point.lat, point.lng); } }}><Tooltip permanent direction="top" offset={[0, -14]}>Nueva ubicación · arrastrá para ajustar</Tooltip></Marker>}
+    {draftPoints.length >= 2 && <Polyline positions={draftPoints.map((point) => [point.latitude, point.longitude] as [number, number])} pathOptions={{ color: "#12263f", weight: 4, dashArray: "8 8", opacity: .85 }} />}
+    {draftPoints.map((point, index) => <Marker key={`draft-${index}`} position={[point.latitude, point.longitude]} icon={L.divIcon({ className: "map-draft-marker", html: `<i>${draftPoints.length > 1 ? index + 1 : ""}</i>`, iconSize: [22, 22], iconAnchor: [11, 11] })} draggable eventHandlers={{ dragend: (event) => { const moved = (event.target as L.Marker).getLatLng(); onDraftMove?.(index, moved.lat, moved.lng); } }}>{index === draftPoints.length - 1 && <Tooltip permanent direction="top" offset={[0, -14]}>{draftPoints.length > 1 ? `Punto ${index + 1} · arrastrá para ajustar` : "Nueva ubicación · arrastrá para ajustar"}</Tooltip>}</Marker>)}
   </MapContainer>;
 }

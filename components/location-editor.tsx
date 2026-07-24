@@ -13,7 +13,8 @@ import {
   Search,
   X,
 } from "lucide-react";
-import type { SpaceRecord } from "@/types/domain";
+import type { GeoPoint, SpaceRecord } from "@/types/domain";
+import { DraftPointsList } from "./relocation-editor";
 
 type LocationEditorProps = {
   space: SpaceRecord;
@@ -21,7 +22,8 @@ type LocationEditorProps = {
   total: number;
   pendingSpaces: SpaceRecord[];
   suggestions: SpaceRecord[];
-  draft?: { latitude: number; longitude: number };
+  points: GeoPoint[];
+  isLinear: boolean;
   busy: boolean;
   error: string;
   geoBusy: boolean;
@@ -30,6 +32,8 @@ type LocationEditorProps = {
   onPrevious: () => void;
   onNext: () => void;
   onSelectSpace: (space: SpaceRecord) => void;
+  onAddGpsPoint: () => void;
+  onRemovePoint: (index: number) => void;
   onUseMyLocation: () => void;
   onSave: () => void;
   onClose: () => void;
@@ -39,7 +43,7 @@ function normalizeSearch(value: string) {
   return value
     .toLocaleLowerCase("es")
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[̀-ͯ]/g, "")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -50,7 +54,8 @@ export function LocationEditor({
   total,
   pendingSpaces,
   suggestions,
-  draft,
+  points,
+  isLinear,
   busy,
   error,
   geoBusy,
@@ -59,6 +64,8 @@ export function LocationEditor({
   onPrevious,
   onNext,
   onSelectSpace,
+  onAddGpsPoint,
+  onRemovePoint,
   onUseMyLocation,
   onSave,
   onClose,
@@ -67,6 +74,8 @@ export function LocationEditor({
   const [collapsed, setCollapsed] = useState(false);
   const term = normalizeSearch(search);
   const nearbySuggestions = suggestions.filter((item) => item.id !== space.id);
+  const draft = points[points.length - 1];
+  const ready = isLinear ? points.length >= 2 : points.length >= 1;
   const results = term
     ? pendingSpaces
         .filter((item) => normalizeSearch([item.name, item.address, item.neighborhood, item.source_type].filter(Boolean).join(" ")).includes(term))
@@ -92,8 +101,8 @@ export function LocationEditor({
 
       {collapsed ? (
         <div className="location-editor-mini">
-          <span>{draft ? `${draft.latitude.toFixed(5)}, ${draft.longitude.toFixed(5)}` : "Toca el mapa para marcar el punto"}</span>
-          <button disabled={!draft || busy} onClick={onSave}>
+          <span>{isLinear ? `${points.length} de 3 puntos marcados` : draft ? `${draft.latitude.toFixed(5)}, ${draft.longitude.toFixed(5)}` : "Toca el mapa para marcar el punto"}</span>
+          <button disabled={!points.length || busy} onClick={onSave}>
             {busy ? <LoaderCircle className="spin" size={14} /> : <Check size={14} />}
             Guardar
           </button>
@@ -149,25 +158,28 @@ export function LocationEditor({
             </div>
           </div>
 
-          <div className={`pick-instruction ${draft ? "ready" : ""}`}>
-            {draft ? <Check size={18} /> : <MapPin size={18} />}
+          <div className={`pick-instruction ${ready ? "ready" : ""}`}>
+            {ready ? <Check size={18} /> : <MapPin size={18} />}
             <div>
-              <strong>{draft ? "Punto seleccionado" : "Marca el punto en el mapa"}</strong>
-              <span>{draft ? `${draft.latitude.toFixed(6)}, ${draft.longitude.toFixed(6)}` : "Toca el mapa o usa tu ubicacion actual. Podes ajustar tocando otro punto."}</span>
+              <strong>{isLinear ? `${points.length} de 3 puntos marcados` : draft ? "Punto seleccionado" : "Marca el punto en el mapa"}</strong>
+              <span>{isLinear ? "Marca inicio y fin del tramo (y un punto medio si hace curva). Toca el mapa o agrega tu ubicacion GPS." : draft ? `${draft.latitude.toFixed(6)}, ${draft.longitude.toFixed(6)}` : "Toca el mapa o usa tu ubicacion actual. Podes ajustar tocando otro punto."}</span>
             </div>
           </div>
 
-          <button className="use-my-location" disabled={geoBusy} onClick={onUseMyLocation}>
+          {isLinear && <DraftPointsList points={points} onRemovePoint={onRemovePoint} />}
+
+          <button className="use-my-location" disabled={geoBusy} onClick={isLinear ? onAddGpsPoint : onUseMyLocation}>
             {geoBusy ? <LoaderCircle className="spin" size={18} /> : <LocateFixed size={18} />}
-            Usar mi ubicacion actual
+            {isLinear ? "Agregar punto con mi ubicacion" : "Usar mi ubicacion actual"}
           </button>
           {geoBusy && <p className="location-hint">Si el navegador pregunta por tu ubicacion, elegi Permitir.</p>}
           {geoError && <p className="location-error">{geoError}</p>}
+          {isLinear && points.length === 1 && <p className="location-warning">Con un solo punto queda como marcador. Agrega el punto final para dibujar el tramo.</p>}
           {warning && <p className="location-warning">{warning}</p>}
           {error && <p className="location-error">{error}</p>}
 
           <div className="location-editor-actions">
-            <button className="save-location" disabled={!draft || busy} onClick={onSave}>
+            <button className="save-location" disabled={!points.length || busy} onClick={onSave}>
               {busy ? <LoaderCircle className="spin" size={18} /> : <Check size={18} />}
               Guardar ubicacion
             </button>

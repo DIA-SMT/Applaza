@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { Check, ChevronDown, CloudOff, Crosshair, Filter, Layers3, LoaderCircle, LocateFixed, MapPin, RefreshCw, RotateCcw, Search, SlidersHorizontal, Trees, X } from "lucide-react";
-import type { MaintenancePhoto, MaintenanceStatus, Provider, SpaceRecord, SpaceType, UserProfile } from "@/types/domain";
+import type { GeoPoint, MaintenancePhoto, MaintenanceStatus, Provider, SpaceRecord, SpaceType, UserProfile } from "@/types/domain";
 import { statusColors, statusLabels } from "./status-badge";
 import { SpaceDetail } from "./space-detail";
 import { LocationEditor } from "./location-editor";
@@ -31,7 +31,7 @@ export function OperationalMap({ spaces, providers, currentUser, dataError, setS
   const [startDate, setStartDate] = useState(""); const [endDate, setEndDate] = useState("");
   const [activeLayers, setActiveLayers] = useState(() => new Set<string>(layerDefinitions.map((layer) => layer.id)));
   const [layersOpen, setLayersOpen] = useState(true); const [filtersOpen, setFiltersOpen] = useState(false);
-  const [locationMode, setLocationMode] = useState(false); const [pendingIndex, setPendingIndex] = useState(0); const [draftLocation, setDraftLocation] = useState<{ latitude: number; longitude: number }>(); const [locationBusy, setLocationBusy] = useState(false); const [locationError, setLocationError] = useState("");
+  const [locationMode, setLocationMode] = useState(false); const [pendingIndex, setPendingIndex] = useState(0); const [draftPoints, setDraftPoints] = useState<GeoPoint[]>([]); const [locationBusy, setLocationBusy] = useState(false); const [locationError, setLocationError] = useState("");
   const [relocatingId, setRelocatingId] = useState<string>();
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number; accuracy: number }>(); const [geoBusy, setGeoBusy] = useState(false); const [geoError, setGeoError] = useState(""); const [draftFromGps, setDraftFromGps] = useState(false);
   const [quickAddOpen, setQuickAddOpen] = useState(false); const [quickAddBusy, setQuickAddBusy] = useState(false); const [quickAddError, setQuickAddError] = useState("");
@@ -76,6 +76,12 @@ export function OperationalMap({ spaces, providers, currentUser, dataError, setS
   const pendingSpace = pendingSpaces[Math.min(pendingIndex, Math.max(0, pendingSpaces.length - 1))];
   const relocatingSpace = spaces.find((space) => space.id === relocatingId);
   const canEditLocations = currentUser.role === "admin" || currentUser.role === "supervisor" || currentUser.role === "inspector";
+  const locationTarget = relocatingSpace ?? (locationMode ? pendingSpace : undefined);
+  const targetIsLinear = Boolean(locationTarget && spaceLayerId(locationTarget) === "platabanda");
+  const maxDraftPoints = targetIsLinear ? 3 : 1;
+  function pushDraftPoint(latitude: number, longitude: number, fromGps: boolean) { setDraftPoints((current) => { const next = [...current]; if (next.length >= maxDraftPoints) next[next.length - 1] = { latitude, longitude }; else next.push({ latitude, longitude }); return next; }); setDraftFromGps(fromGps); }
+  function moveDraftPoint(index: number, latitude: number, longitude: number) { setDraftPoints((current) => current.map((point, pointIndex) => pointIndex === index ? { latitude, longitude } : point)); setDraftFromGps(false); }
+  function removeDraftPoint(index: number) { setDraftPoints((current) => current.filter((_, pointIndex) => pointIndex !== index)); }
   const gpsWarning = draftFromGps && userLocation && userLocation.accuracy > 50 ? `La precisión del GPS es de ±${Math.round(userLocation.accuracy)} m. Ajustá el punto arrastrándolo en el mapa si no coincide con el lugar real.` : "";
   const nearbySuggestions = useMemo(() => {
     if (!userLocation) return [] as SpaceRecord[];
@@ -93,7 +99,7 @@ export function OperationalMap({ spaces, providers, currentUser, dataError, setS
     setPendingIndex(index);
     setRelocatingId(undefined);
     setSelectedId(undefined);
-    setDraftLocation(undefined);
+    setDraftPoints([]);
     setLocationError("");
   }, [locateSpaceId, canEditLocations, pendingSpaces]);
 
@@ -132,14 +138,16 @@ export function OperationalMap({ spaces, providers, currentUser, dataError, setS
   function toggleLayer(id: string) { setActiveLayers((current) => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next; }); }
   function clearFilters() { setQuery(""); setProviderId("all"); setStatus("all"); setType("all"); setNeighborhood("all"); setLocationFilter("all"); setStartDate(""); setEndDate(""); }
   function selectSearchResult(space: SpaceRecord) { setSelectedId(space.id); lastAutoSelectedQuery.current = query.trim(); }
-  function movePending(direction: number) { if (!pendingSpaces.length) return; setPendingIndex((current) => (current + direction + pendingSpaces.length) % pendingSpaces.length); setDraftLocation(undefined); setLocationError(""); }
+  function movePending(direction: number) { if (!pendingSpaces.length) return; setPendingIndex((current) => (current + direction + pendingSpaces.length) % pendingSpaces.length); setDraftPoints([]); setLocationError(""); }
   async function saveLocation() {
-    if (!pendingSpace || !draftLocation) return;
+    if (!pendingSpace || !draftPoints.length) return;
     setLocationBusy(true); setLocationError("");
     const supabase = getSupabaseBrowserClient();
     if (!supabase) { setLocationError("Supabase no está configurado."); setLocationBusy(false); return; }
-    const values = { latitude: draftLocation.latitude, longitude: draftLocation.longitude, geocoding_source: "Manual Applaza", geocoded_at: new Date().toISOString() };
-    const applyLocal = () => { setSpaces((current) => current.map((space) => space.id === pendingSpace.id ? { ...space, ...draftLocation } : space)); setDraftLocation(undefined); setLocationBusy(false); };
+    const primary = draftPoints[0];
+    const path = spaceLayerId(pendingSpace) === "platabanda" && draftPoints.length >= 2 ? draftPoints : null;
+    const values = { latitude: primary.latitude, longitude: primary.longitude, path, geocoding_source: "Manual Applaza", geocoded_at: new Date().toISOString() };
+    const applyLocal = () => { setSpaces((current) => current.map((space) => space.id === pendingSpace.id ? { ...space, latitude: primary.latitude, longitude: primary.longitude, path } : space)); setDraftPoints([]); setLocationBusy(false); };
     const queueIt = () => { enqueueOp({ kind: "update", match: pendingSpace.id, values, label: `Ubicación de ${pendingSpace.name}` }); applyLocal(); };
     if (!navigator.onLine) { queueIt(); return; }
     const { error } = await supabase.from("green_spaces").update(values).eq("id", pendingSpace.id);
@@ -147,21 +155,23 @@ export function OperationalMap({ spaces, providers, currentUser, dataError, setS
     applyLocal();
   }
   async function saveRelocation() {
-    if (!relocatingSpace || !draftLocation) return;
+    if (!relocatingSpace || !draftPoints.length) return;
     setLocationBusy(true); setLocationError("");
     const supabase = getSupabaseBrowserClient();
     if (!supabase) { setLocationError("Supabase no está configurado."); setLocationBusy(false); return; }
-    const values = { latitude: draftLocation.latitude, longitude: draftLocation.longitude, geocoding_source: "Corrección manual Applaza", geocoded_at: new Date().toISOString() };
-    const applyLocal = () => { setSpaces((current) => current.map((space) => space.id === relocatingSpace.id ? { ...space, ...draftLocation } : space)); setDraftLocation(undefined); setRelocatingId(undefined); setLocationBusy(false); };
+    const primary = draftPoints[0];
+    const path = spaceLayerId(relocatingSpace) === "platabanda" && draftPoints.length >= 2 ? draftPoints : null;
+    const values = { latitude: primary.latitude, longitude: primary.longitude, path, geocoding_source: "Corrección manual Applaza", geocoded_at: new Date().toISOString() };
+    const applyLocal = () => { setSpaces((current) => current.map((space) => space.id === relocatingSpace.id ? { ...space, latitude: primary.latitude, longitude: primary.longitude, path } : space)); setDraftPoints([]); setRelocatingId(undefined); setLocationBusy(false); };
     const queueIt = () => { enqueueOp({ kind: "update", match: relocatingSpace.id, values, label: `Reubicación de ${relocatingSpace.name}` }); applyLocal(); };
     if (!navigator.onLine) { queueIt(); return; }
     const { error } = await supabase.from("green_spaces").update(values).eq("id", relocatingSpace.id);
     if (error) { if (isNetworkError(error.message)) { queueIt(); return; } setLocationError(error.message); setLocationBusy(false); return; }
     applyLocal();
   }
-  function beginRelocation(space: SpaceRecord) { setLocationMode(false); setRelocatingId(space.id); setSelectedId(undefined); setDraftLocation(undefined); setLocationError(""); }
-  function selectPendingSpace(space: SpaceRecord) { const nextIndex = pendingSpaces.findIndex((item) => item.id === space.id); if (nextIndex < 0) return; setPendingIndex(nextIndex); setDraftLocation(undefined); setLocationError(""); }
-  function openQuickAdd() { if (!canEditLocations || !userLocation) return; setQuickAddOpen(true); setQuickAddError(""); setLocationMode(false); setRelocatingId(undefined); setSelectedId(undefined); setDraftLocation(undefined); }
+  function beginRelocation(space: SpaceRecord) { setLocationMode(false); setRelocatingId(space.id); setSelectedId(undefined); setDraftPoints([]); setLocationError(""); }
+  function selectPendingSpace(space: SpaceRecord) { const nextIndex = pendingSpaces.findIndex((item) => item.id === space.id); if (nextIndex < 0) return; setPendingIndex(nextIndex); setDraftPoints([]); setLocationError(""); }
+  function openQuickAdd() { if (!canEditLocations || !userLocation) return; setQuickAddOpen(true); setQuickAddError(""); setLocationMode(false); setRelocatingId(undefined); setSelectedId(undefined); setDraftPoints([]); }
   async function saveQuickAdd(input: { name: string; type: SpaceType; address: string; neighborhood: string }) {
     if (!userLocation) return;
     setQuickAddBusy(true); setQuickAddError("");
@@ -203,7 +213,7 @@ export function OperationalMap({ spaces, providers, currentUser, dataError, setS
       return;
     }
     setGeoBusy(true); setGeoError("");
-    navigator.geolocation.getCurrentPosition((position) => { const { latitude, longitude, accuracy } = position.coords; setUserLocation({ latitude, longitude, accuracy }); if (assignDraft) { setDraftLocation({ latitude, longitude }); setDraftFromGps(true); } setGeoBusy(false); onLocated?.(); }, (failure) => { setGeoBusy(false); setGeoError(failure.code === failure.PERMISSION_DENIED ? "No se aceptó el permiso. Tocá de nuevo el botón y elegí Permitir cuando el navegador pregunte." : "No pudimos obtener tu ubicación. Verificá que el GPS del dispositivo esté encendido y reintentá."); }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 15000 });
+    navigator.geolocation.getCurrentPosition((position) => { const { latitude, longitude, accuracy } = position.coords; setUserLocation({ latitude, longitude, accuracy }); if (assignDraft) pushDraftPoint(latitude, longitude, true); setGeoBusy(false); onLocated?.(); }, (failure) => { setGeoBusy(false); setGeoError(failure.code === failure.PERMISSION_DENIED ? "No se aceptó el permiso. Tocá de nuevo el botón y elegí Permitir cuando el navegador pregunte." : "No pudimos obtener tu ubicación. Verificá que el GPS del dispositivo esté encendido y reintentá."); }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 15000 });
   }
   function addPhoto(photo: MaintenancePhoto) { setSpaces((current) => current.map((space) => space.task?.id === photo.maintenance_task_id ? { ...space, photos: [photo, ...space.photos] } : space)); }
 
@@ -213,7 +223,7 @@ export function OperationalMap({ spaces, providers, currentUser, dataError, setS
       <button className={`gis-tool-button ${layersOpen ? "active" : ""}`} onClick={() => setLayersOpen((value) => !value)}><Layers3 size={17} />Capas <span>{activeLayers.size}</span></button>
       <button className={`gis-tool-button ${filtersOpen ? "active" : ""}`} onClick={() => setFiltersOpen((value) => !value)}><SlidersHorizontal size={17} />Filtros {activeFilterCount > 0 && <span>{activeFilterCount}</span>}<ChevronDown size={14} /></button>
       <div className="gis-toolbar-summary"><strong>{mappedSpaces.length}</strong><span>visibles en mapa</span></div>
-      {canEditLocations && <button className={`gis-location-button ${locationMode || relocatingSpace ? "active" : ""}`} onClick={() => { const closing = locationMode || Boolean(relocatingSpace); setLocationMode(!closing); setRelocatingId(undefined); setSelectedId(undefined); setDraftLocation(undefined); }}><Crosshair size={17} />{locationMode || relocatingSpace ? "Cerrar editor" : `Ubicar (${pendingSpaces.length})`}</button>}
+      {canEditLocations && <button className={`gis-location-button ${locationMode || relocatingSpace ? "active" : ""}`} onClick={() => { const closing = locationMode || Boolean(relocatingSpace); setLocationMode(!closing); setRelocatingId(undefined); setSelectedId(undefined); setDraftPoints([]); }}><Crosshair size={17} />{locationMode || relocatingSpace ? "Cerrar editor" : `Ubicar (${pendingSpaces.length})`}</button>}
     </header>
 
     <div className={`gis-filter-drawer ${filtersOpen ? "open" : ""}`}>
@@ -228,7 +238,7 @@ export function OperationalMap({ spaces, providers, currentUser, dataError, setS
     </div>
 
     <div className={`gis-map-stage ${locationMode || relocatingSpace ? "picking-location" : ""}`}>
-      <SpaceMap spaces={filteredSpaces} selected={selected} onSelect={(space) => !locationMode && !relocatingSpace && setSelectedId(space.id)} locationMode={locationMode || Boolean(relocatingSpace)} draftLocation={draftLocation} onLocationPick={(latitude, longitude) => { setDraftLocation({ latitude, longitude }); setDraftFromGps(false); }} markerColors={markerColors} userLocation={userLocation} onUserClick={canEditLocations ? openQuickAdd : undefined} />
+      <SpaceMap spaces={filteredSpaces} selected={selected} onSelect={(space) => !locationMode && !relocatingSpace && setSelectedId(space.id)} locationMode={locationMode || Boolean(relocatingSpace)} draftPoints={draftPoints} onLocationPick={(latitude, longitude) => pushDraftPoint(latitude, longitude, false)} onDraftMove={moveDraftPoint} markerColors={markerColors} userLocation={userLocation} onUserClick={canEditLocations ? openQuickAdd : undefined} />
 
       {!locationMode && !relocatingSpace && <button className="gis-locate-fab" title="Centrar el mapa en mi ubicación" aria-label="Centrar el mapa en mi ubicación" disabled={geoBusy} onClick={() => locateUser(false)}>{geoBusy ? <LoaderCircle size={17} className="spin" /> : <LocateFixed size={17} />}</button>}
       {geoError && !locationMode && !relocatingSpace && <div className="gis-geo-toast" onClick={() => setGeoError("")}>{geoError}</div>}
@@ -242,7 +252,7 @@ export function OperationalMap({ spaces, providers, currentUser, dataError, setS
 
       {dataError ? <div className="gis-state gis-error"><TriangleIcon /><strong>No pudimos cargar el mapa operativo</strong><span>{dataError}</span></div> : spaces.length === 0 ? <div className="gis-state"><Trees /><strong>Todavía no hay espacios verdes cargados</strong><span>Los registros aparecerán aquí cuando estén disponibles en Supabase.</span></div> : filteredSpaces.length === 0 ? <div className="gis-state"><Filter /><strong>No hay resultados para los filtros seleccionados</strong><button onClick={clearFilters}>Restablecer filtros</button></div> : mappedSpaces.length === 0 ? <div className="gis-state"><MapPin /><strong>Los resultados no tienen ubicación</strong><span>Podés asignarla desde el editor manual.</span></div> : null}
 
-      {quickAddOpen && userLocation ? <QuickAddEditor location={userLocation} pendingSpaces={pendingSpaces} busy={quickAddBusy} error={quickAddError} onSave={saveQuickAdd} onLink={linkQuickAdd} onClose={() => setQuickAddOpen(false)} /> : relocatingSpace ? <RelocationEditor space={relocatingSpace} draft={draftLocation} busy={locationBusy} error={locationError} geoBusy={geoBusy} geoError={geoError} warning={gpsWarning} onUseMyLocation={() => locateUser(true)} onSave={saveRelocation} onClose={() => { setRelocatingId(undefined); setDraftLocation(undefined); setLocationError(""); }} /> : locationMode && pendingSpace ? <LocationEditor space={pendingSpace} index={pendingIndex} total={pendingSpaces.length} pendingSpaces={pendingSpaces} suggestions={nearbySuggestions} draft={draftLocation} busy={locationBusy} error={locationError} geoBusy={geoBusy} geoError={geoError} warning={gpsWarning} onPrevious={() => movePending(-1)} onNext={() => movePending(1)} onSelectSpace={selectPendingSpace} onUseMyLocation={() => locateUser(false, () => { setLocationMode(false); setDraftLocation(undefined); setQuickAddError(""); setQuickAddOpen(true); })} onSave={saveLocation} onClose={() => setLocationMode(false)} /> : selected && <SpaceDetail space={selected} providers={providers} currentUser={currentUser} onClose={() => setSelectedId(undefined)} onPhoto={addPhoto} onUpdate={(updated) => setSpaces((current) => current.map((space) => space.id === updated.id ? updated : space))} onRelocate={beginRelocation} />}
+      {quickAddOpen && userLocation ? <QuickAddEditor location={userLocation} pendingSpaces={pendingSpaces} busy={quickAddBusy} error={quickAddError} onSave={saveQuickAdd} onLink={linkQuickAdd} onClose={() => setQuickAddOpen(false)} /> : relocatingSpace ? <RelocationEditor space={relocatingSpace} points={draftPoints} isLinear={targetIsLinear} busy={locationBusy} error={locationError} geoBusy={geoBusy} geoError={geoError} warning={gpsWarning} onUseMyLocation={() => locateUser(true)} onRemovePoint={removeDraftPoint} onSave={saveRelocation} onClose={() => { setRelocatingId(undefined); setDraftPoints([]); setLocationError(""); }} /> : locationMode && pendingSpace ? <LocationEditor space={pendingSpace} index={pendingIndex} total={pendingSpaces.length} pendingSpaces={pendingSpaces} suggestions={nearbySuggestions} points={draftPoints} isLinear={targetIsLinear} busy={locationBusy} error={locationError} geoBusy={geoBusy} geoError={geoError} warning={gpsWarning} onPrevious={() => movePending(-1)} onNext={() => movePending(1)} onSelectSpace={selectPendingSpace} onAddGpsPoint={() => locateUser(true)} onRemovePoint={removeDraftPoint} onUseMyLocation={() => locateUser(false, () => { setLocationMode(false); setDraftPoints([]); setQuickAddError(""); setQuickAddOpen(true); })} onSave={saveLocation} onClose={() => setLocationMode(false)} /> : selected && <SpaceDetail space={selected} providers={providers} currentUser={currentUser} onClose={() => setSelectedId(undefined)} onPhoto={addPhoto} onUpdate={(updated) => setSpaces((current) => current.map((space) => space.id === updated.id ? updated : space))} onRelocate={beginRelocation} />}
     </div>
   </section>;
 }
