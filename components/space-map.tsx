@@ -53,7 +53,7 @@ export default function SpaceMap({ spaces, selected, onSelect, locationMode = fa
     <ZoomWatcher onZoom={setZoom} />
     {userLocation && <Circle center={[userLocation.latitude, userLocation.longitude]} radius={Math.max(userLocation.accuracy, 15)} pathOptions={{ color: "#06b6d4", weight: 1, fillColor: "#06b6d4", fillOpacity: .1 }} />}
     {userLocation && <CircleMarker center={[userLocation.latitude, userLocation.longitude]} radius={8} pathOptions={{ color: "white", weight: 3, fillColor: "#06b6d4", fillOpacity: 1 }} eventHandlers={onUserClick ? { click: onUserClick } : undefined}><Tooltip direction="top" offset={[0, -8]}>{onUserClick ? <><strong>Tu ubicación</strong><br />Tocá para cargar un espacio acá</> : "Tu ubicación"}</Tooltip></CircleMarker>}
-    {pathSpaces.map((space) => <Polyline key={`path-${space.id}`} positions={space.path!.map((point) => [point.latitude, point.longitude] as [number, number])} pathOptions={{ color: markerColors?.[space.id] ?? "#94a3b8", weight: selected?.id === space.id ? 8 : 6, opacity: .92, lineCap: "round" }} eventHandlers={{ click: () => onSelect(space) }}>
+    {pathSpaces.map((space) => <Polyline key={`path-${space.id}`} positions={space.path!.map((point) => [point.latitude, point.longitude] as [number, number])} pathOptions={{ color: markerColors?.[space.id] ?? "#94a3b8", weight: selected?.id === space.id ? 7 : 5, opacity: .95, lineCap: "round", dashArray: "10 14" }} eventHandlers={{ click: () => onSelect(space) }}>
       <Tooltip direction="top" sticky><strong>{space.name}</strong><br />{space.source_type || space.type}</Tooltip>
     </Polyline>)}
     <ClusterLayer clusters={clusters} markerColors={markerColors} />
