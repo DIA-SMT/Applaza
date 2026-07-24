@@ -86,15 +86,22 @@ export function AssistantChat() {
   const [loading, setLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const [bubblePosition, setBubblePosition] = useState<{ x: number; y: number }>();
+  const [bubbleSnapping, setBubbleSnapping] = useState(false);
   const dragState = useRef<{ pointerId: number; startX: number; startY: number; originX: number; originY: number; moved: boolean }>(null);
   const justDragged = useRef(false);
 
   useEffect(() => {
-    try { const saved = localStorage.getItem("migue-bubble-position"); if (saved) setBubblePosition(clampBubble(JSON.parse(saved))); } catch { /* posición guardada inválida */ }
+    try { const saved = localStorage.getItem("migue-bubble-position"); if (saved) setBubblePosition(snapToEdge(clampBubble(JSON.parse(saved)), 120)); } catch { /* posición guardada inválida */ }
   }, []);
 
   function clampBubble(position: { x: number; y: number }) {
     return { x: Math.min(Math.max(position.x, 8), window.innerWidth - 128), y: Math.min(Math.max(position.y, 8), window.innerHeight - 60) };
+  }
+
+  function snapToEdge(position: { x: number; y: number }, width: number) {
+    const margin = 12;
+    const snappedX = position.x + width / 2 < window.innerWidth / 2 ? margin : window.innerWidth - width - margin;
+    return { x: snappedX, y: Math.min(Math.max(position.y, 8), window.innerHeight - 60) };
   }
 
   function onBubblePointerDown(event: ReactPointerEvent<HTMLButtonElement>) {
@@ -117,8 +124,12 @@ export function AssistantChat() {
     dragState.current = null;
     if (!drag?.moved) return;
     justDragged.current = true;
-    const rect = event.currentTarget.getBoundingClientRect();
-    try { localStorage.setItem("migue-bubble-position", JSON.stringify({ x: rect.left, y: rect.top })); } catch { /* almacenamiento no disponible */ }
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const snapped = snapToEdge({ x: bounds.left, y: bounds.top }, bounds.width);
+    setBubblePosition(snapped);
+    setBubbleSnapping(true);
+    window.setTimeout(() => setBubbleSnapping(false), 240);
+    try { localStorage.setItem("migue-bubble-position", JSON.stringify(snapped)); } catch { /* almacenamiento no disponible */ }
   }
 
   function onBubbleClick() {
@@ -174,7 +185,7 @@ export function AssistantChat() {
   }
 
   return <>
-    {!open && <button className="assistant-launcher" style={bubblePosition ? { left: bubblePosition.x, top: bubblePosition.y, right: "auto", bottom: "auto" } : undefined} onPointerDown={onBubblePointerDown} onPointerMove={onBubblePointerMove} onPointerUp={onBubblePointerUp} onPointerCancel={() => { dragState.current = null; }} onClick={onBubbleClick} aria-label="Abrir Migue">
+    {!open && <button className={`assistant-launcher ${bubbleSnapping ? "snapping" : ""}`} style={bubblePosition ? { left: bubblePosition.x, top: bubblePosition.y, right: "auto", bottom: "auto" } : undefined} onPointerDown={onBubblePointerDown} onPointerMove={onBubblePointerMove} onPointerUp={onBubblePointerUp} onPointerCancel={() => { dragState.current = null; }} onClick={onBubbleClick} aria-label="Abrir Migue">
       <Image src="/migue-avatar.png" alt="" width={42} height={42} />
       <span>Migue</span>
     </button>}
