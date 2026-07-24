@@ -191,15 +191,17 @@ function MetricDetailPanel({
 }) {
   const [query, setQuery] = useState("");
   const [selectedProviderId, setSelectedProviderId] = useState<string>();
+  const [evidenceFilter, setEvidenceFilter] = useState<"con" | "sin" | "todos">("con");
   const activeProviders = providers.filter((provider) => provider.active);
   const metricCopy = metricContent(metric);
+  const withEvidence = spaces.filter((space) => space.photos.length > 0).length;
   const metricSpaces = useMemo(() => {
     if (metric === "mapped") return spaces.filter((space) => space.latitude != null && space.longitude != null);
     if (metric === "pending") return spaces.filter((space) => space.latitude == null || space.longitude == null);
-    if (metric === "evidence") return spaces.filter((space) => space.photos.length > 0);
+    if (metric === "evidence") return evidenceFilter === "todos" ? spaces : spaces.filter((space) => evidenceFilter === "con" ? space.photos.length > 0 : space.photos.length === 0);
     if (metric === "providers" && selectedProviderId) return spaces.filter((space) => space.provider?.id === selectedProviderId);
     return spaces;
-  }, [metric, selectedProviderId, spaces]);
+  }, [metric, selectedProviderId, spaces, evidenceFilter]);
   const filteredSpaces = metricSpaces.filter((space) => {
     const term = normalizeQuery(query);
     const text = normalizeQuery([space.name, space.address, space.neighborhood, space.section_code, space.source_type, space.provider?.name].filter(Boolean).join(" "));
@@ -221,6 +223,7 @@ function MetricDetailPanel({
 
   useEffect(() => {
     setQuery("");
+    setEvidenceFilter("con");
     if (metric !== "providers") setSelectedProviderId(undefined);
   }, [metric]);
 
@@ -228,11 +231,17 @@ function MetricDetailPanel({
     <div className="metric-panel-head">
       <div>
         <p>{metricCopy.eyebrow}</p>
-        <h2>{metricCopy.title}</h2>
+        <h2>{metric === "evidence" && evidenceFilter === "sin" ? "Espacios sin evidencia cargada" : metric === "evidence" && evidenceFilter === "todos" ? "Evidencias por espacio" : metricCopy.title}</h2>
         <span>{metricCopy.description}</span>
       </div>
       <button onClick={onOpenMap}><Map size={16} />Abrir mapa operativo</button>
     </div>
+
+    {metric === "evidence" && <div className="evidence-filter" role="group" aria-label="Filtrar espacios por evidencia">
+      <button className={evidenceFilter === "con" ? "active" : ""} aria-pressed={evidenceFilter === "con"} onClick={() => setEvidenceFilter("con")}>Con evidencia <b>{withEvidence}</b></button>
+      <button className={evidenceFilter === "sin" ? "active" : ""} aria-pressed={evidenceFilter === "sin"} onClick={() => setEvidenceFilter("sin")}>Sin evidencia <b>{spaces.length - withEvidence}</b></button>
+      <button className={evidenceFilter === "todos" ? "active" : ""} aria-pressed={evidenceFilter === "todos"} onClick={() => setEvidenceFilter("todos")}>Todos <b>{spaces.length}</b></button>
+    </div>}
 
     {metric === "providers" ? <div className="provider-summary-grid">
       {providerRows.map((row) => <button key={row.provider.id} className={selectedProviderId === row.provider.id ? "active" : ""} onClick={() => setSelectedProviderId(row.provider.id)}>
@@ -263,7 +272,7 @@ function MetricDetailPanel({
           <button onClick={() => onSelectSpace(space)}>Ver / editar</button>
         </div>
       </article>)}
-    </div> : <p className="dashboard-empty compact">No hay registros para este filtro.</p>}
+    </div> : <p className="dashboard-empty compact">{metric === "evidence" && evidenceFilter === "sin" && !query.trim() ? "Todos los espacios tienen al menos una evidencia cargada." : "No hay registros para este filtro."}</p>}
   </section>;
 }
 
