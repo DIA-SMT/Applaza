@@ -2,11 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { jsPDF } from "jspdf";
-import { AlertCircle, CalendarDays, Camera, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Download, FileSearch, ListFilter, LoaderCircle, MessageSquarePlus, ShieldCheck, Trash2, TriangleAlert, X } from "lucide-react";
+import { AlertCircle, CalendarDays, Camera, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Download, FileSearch, ListFilter, LoaderCircle, MessageSquarePlus, Route, ShieldCheck, Trash2, TriangleAlert, X } from "lucide-react";
 import type { Provider, SpaceRecord, UserProfile } from "@/types/domain";
+import { buildEstimatedDistanceReport, filterEstimatedDistanceReport, findMostProductiveDistanceDay, formatEstimatedKm, type EstimatedDistanceReport } from "@/lib/estimated-distance";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
 import { photoTypeLabel } from "@/lib/photo-label";
 import { createBrandedPdf, downloadPdfFile, drawPdfHeader, drawPdfInfoBox, fitPdfText, setPdfFont } from "@/lib/branded-pdf";
+import { DistanceReportContent, formatDistanceDay } from "./distance-report-content";
 
 type ControlValue = "si" | "no" | null;
 type ControlRecord = {
@@ -23,7 +25,7 @@ type ControlRecord = {
   created_at?: string;
   updated_at?: string;
 };
-type MetricKey = "assigned" | "reviewed" | "observed" | "evidence";
+type MetricKey = "assigned" | "reviewed" | "observed" | "evidence" | "distance";
 type ProviderRow = ReturnType<typeof buildAudit>["providerRows"][number];
 type AuditObservation = {
   id: string;
@@ -38,7 +40,7 @@ type AuditObservationItem = AuditObservation & { space?: SpaceRecord };
 type PhotoViewerItem = { id: string; url: string; type: string; createdAt: string; title: string; subtitle: string };
 const controlKeys = ["control_1", "control_2", "control_3"] as const;
 
-export function AuditDashboard({ spaces, providers, currentUser, onPhotoDeleted, mode = "audit" }: { spaces: SpaceRecord[]; providers: Provider[]; currentUser: UserProfile; onPhotoDeleted?: (photoId: string) => void; mode?: "audit" | "reports" }) {
+export function AuditDashboard({ spaces, providers, currentUser, userProfiles, onPhotoDeleted, mode = "audit" }: { spaces: SpaceRecord[]; providers: Provider[]; currentUser: UserProfile; userProfiles: UserProfile[]; onPhotoDeleted?: (photoId: string) => void; mode?: "audit" | "reports" }) {
   const [month, setMonth] = useState(currentMonth());
   const [records, setRecords] = useState<ControlRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -50,6 +52,7 @@ export function AuditDashboard({ spaces, providers, currentUser, onPhotoDeleted,
   const [observations, setObservations] = useState<AuditObservation[]>([]);
   const [observationsError, setObservationsError] = useState<string | null>(null);
   const [selectedEvidenceSpaceId, setSelectedEvidenceSpaceId] = useState("");
+  const [selectedDistanceDay, setSelectedDistanceDay] = useState("all");
   const [photoViewer, setPhotoViewer] = useState<PhotoViewerItem>();
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
@@ -137,13 +140,22 @@ export function AuditDashboard({ spaces, providers, currentUser, onPhotoDeleted,
       neighborhood: space.neighborhood || "Sin barrio",
     })))
     .sort((left, right) => right.created_at.localeCompare(left.created_at)), [spaces, selectedProviderId, month]);
-  const commandSummary = activeMetric === "observed" ? `${observationItems.length} observaciones cargadas por supervision` : reportView.summary;
+  const distanceSpaces = useMemo(() => spaces.filter((space) => selectedProviderId === "all" || space.provider?.id === selectedProviderId), [spaces, selectedProviderId]);
+  const distanceReport = useMemo(() => buildEstimatedDistanceReport(distanceSpaces, userProfiles, currentUser, month), [distanceSpaces, userProfiles, currentUser, month]);
+  const visibleDistanceReport = useMemo(() => filterEstimatedDistanceReport(distanceReport, selectedDistanceDay), [distanceReport, selectedDistanceDay]);
+  const productiveDistanceDay = useMemo(() => findMostProductiveDistanceDay(distanceReport), [distanceReport]);
+  const commandSummary = activeMetric === "observed"
+    ? `${observationItems.length} observaciones cargadas por supervision`
+    : activeMetric === "distance"
+      ? `${formatEstimatedKm(visibleDistanceReport.totalKm)} km estimados - ${visibleDistanceReport.routeCount} jornadas`
+      : reportView.summary;
   const periodLabel = formatMonth(month);
-  const canExport = activeMetric === "observed" ? observationItems.length > 0 : reportView.spacesDetail.length > 0;
-  const exportLabel = activeMetric === "evidence" ? "Descargar book" : activeMetric === "observed" ? "Descargar observaciones" : "Descargar PDF";
+  const canExport = activeMetric === "observed" ? observationItems.length > 0 : activeMetric === "distance" ? visibleDistanceReport.routes.length > 0 : reportView.spacesDetail.length > 0;
+  const exportLabel = activeMetric === "evidence" ? "Descargar book" : activeMetric === "observed" ? "Descargar observaciones" : activeMetric === "distance" ? "Descargar recorrido" : "Descargar PDF";
 
   useEffect(() => {
     setSelectedEvidenceSpaceId("");
+    setSelectedDistanceDay("all");
   }, [month, selectedProviderId, activeMetric]);
 
   useEffect(() => {
@@ -219,6 +231,8 @@ export function AuditDashboard({ spaces, providers, currentUser, onPhotoDeleted,
         await downloadObservationsPdf({ month, period: periodLabel, title: report.title, observations: observationItems, currentUser });
       } else if (activeMetric === "evidence") {
         await downloadEvidenceBookPdf({ month, period: periodLabel, report: { ...report, spacesDetail: reportView.spacesDetail }, currentUser });
+      } else if (activeMetric === "distance") {
+        await downloadDistancePdf({ month, period: periodLabel, title: report.title, report: distanceReport, selectedDay: selectedDistanceDay, currentUser });
       } else {
         await downloadAuditPdf({ filterTitle: reportView.title, month, period: periodLabel, report: { ...report, spacesDetail: reportView.spacesDetail }, currentUser });
       }
@@ -253,6 +267,7 @@ export function AuditDashboard({ spaces, providers, currentUser, onPhotoDeleted,
       <AuditStat active={activeMetric === "reviewed"} onClick={() => selectMetric("reviewed")} icon={CheckCircle2} label="Espacios controlados" value={audit.totalRow.reviewed} note={`${audit.coverage}% de cobertura`} />
       <AuditStat active={activeMetric === "observed"} onClick={() => selectMetric("observed")} icon={AlertCircle} label="Observaciones" value={observations.length} note="Notas de supervision" tone="warning" />
       <AuditStat active={activeMetric === "evidence"} onClick={() => selectMetric("evidence")} icon={FileSearch} label="Evidencias cargadas" value={audit.totalRow.photos} note={audit.latestPhoto ? `Ultima: ${formatDate(audit.latestPhoto)}` : "Sin fotos recientes"} />
+      <AuditStat active={activeMetric === "distance"} onClick={() => selectMetric("distance")} icon={Route} label="Distancia estimada" value={`${formatEstimatedKm(distanceReport.totalKm)} km`} note={productiveDistanceDay ? `Mas activo: ${formatDistanceDay(productiveDistanceDay.day)}` : "Sin recorridos"} />
     </div>
 
     <section className="audit-command-panel">
@@ -278,12 +293,13 @@ export function AuditDashboard({ spaces, providers, currentUser, onPhotoDeleted,
         <div className="audit-panel-title">
           <div>
             <h2>Informe</h2>
-            <p>{activeMetric === "observed" ? "Observaciones operativas" : reportView.title} - {selectedProviderId === "all" ? "Resumen general del periodo" : "Detalle de la cooperativa seleccionada"}</p>
+            <p>{activeMetric === "observed" ? "Observaciones operativas" : activeMetric === "distance" ? "Recorridos estimados" : reportView.title} - {selectedProviderId === "all" ? "Resumen general del periodo" : "Detalle de la cooperativa seleccionada"}</p>
           </div>
           <span className="audit-readonly"><ShieldCheck size={15} />Solo lectura</span>
         </div>
 
         <div className="audit-report">
+          {activeMetric === "distance" ? <DistanceReportContent report={distanceReport} selectedDay={selectedDistanceDay} onDayChange={setSelectedDistanceDay} /> : <>
           <div className="audit-report-kpis">
             <span><b>{report.spaces}</b> espacios</span>
             <span><b>{formatNumber(report.surface)}</b> m2</span>
@@ -311,7 +327,7 @@ export function AuditDashboard({ spaces, providers, currentUser, onPhotoDeleted,
               </article>)}
               {!reportView.spacesDetail.length && <p className="dashboard-empty">{reportView.empty}</p>}
             </div>
-          )}
+          )}</>}
         </div>
       </section>
 
@@ -386,7 +402,7 @@ export function AuditDashboard({ spaces, providers, currentUser, onPhotoDeleted,
   </div>;
 }
 
-function AuditStat({ icon: Icon, label, value, note, tone = "default", active, onClick }: { icon: typeof ClipboardList; label: string; value: number; note: string; tone?: "default" | "warning"; active: boolean; onClick: () => void }) {
+function AuditStat({ icon: Icon, label, value, note, tone = "default", active, onClick }: { icon: typeof ClipboardList; label: string; value: number | string; note: string; tone?: "default" | "warning"; active: boolean; onClick: () => void }) {
   return <button className={`audit-stat ${tone} ${active ? "active" : ""}`} onClick={onClick}>
     <div><Icon size={20} /></div>
     <span>{label}</span>
@@ -820,6 +836,121 @@ async function downloadObservationsPdf({ month, period, title, observations, cur
   downloadPdfFile(doc, `observaciones-${slug(title)}-${month}.pdf`);
 }
 
+async function downloadDistancePdf({
+  month,
+  period,
+  title,
+  report,
+  selectedDay,
+  currentUser,
+}: {
+  month: string;
+  period: string;
+  title: string;
+  report: EstimatedDistanceReport;
+  selectedDay: string;
+  currentUser: UserProfile;
+}) {
+  const { doc, logo } = await createBrandedPdf();
+  const width = doc.internal.pageSize.getWidth();
+  const height = doc.internal.pageSize.getHeight();
+  const margin = 36;
+  const issuedAt = formatDate(new Date().toISOString());
+  const visibleReport = filterEstimatedDistanceReport(report, selectedDay);
+  const productiveDay = findMostProductiveDistanceDay(report);
+  const periodTitle = selectedDay === "all" ? period : formatDistanceDay(selectedDay);
+  let page = 0;
+  let y = 0;
+
+  function startPage() {
+    if (page > 0) doc.addPage();
+    page += 1;
+    drawPdfHeader(doc, logo, {
+      title: "Informe de recorridos estimados",
+      subtitle: `${periodTitle} | ${title}`,
+      page,
+      rightLabel: `Emitido ${issuedAt}`,
+    });
+    y = 108;
+  }
+
+  function drawRouteHeader(userName: string, day: string, stops: number, distanceKm: number, continued = false) {
+    doc.setFillColor(232, 243, 255);
+    doc.roundedRect(margin, y, width - margin * 2, 24, 4, 4, "F");
+    setPdfFont(doc, 8.5, true, "#063f8c");
+    doc.text(fitPdfText(doc, `${userName}${continued ? " (continuacion)" : ""}`, 300), margin + 10, y + 15);
+    setPdfFont(doc, 7, false, "#52677e");
+    doc.text(`${formatDistanceDay(day)} | ${stops} espacios | ${formatEstimatedKm(distanceKm)} km`, width - margin - 10, y + 15, { align: "right" });
+    y += 29;
+    drawDistanceTableHeader(doc, y);
+    y += 19;
+  }
+
+  startPage();
+  setPdfFont(doc, 11, true);
+  doc.text("Resumen del recorrido", margin, y);
+  y += 12;
+  drawPdfInfoBox(doc, margin, y, 150, "Fecha de exportacion", issuedAt);
+  drawPdfInfoBox(doc, margin + 158, y, 170, "Periodo", periodTitle);
+  drawPdfInfoBox(doc, margin + 336, y, 230, "Seleccion", title);
+  drawPdfInfoBox(doc, margin + 574, y, 196, "Emitido por", currentUser.full_name);
+  y += 48;
+  drawPdfInfoBox(doc, margin, y, 170, "Distancia estimada", `${formatEstimatedKm(visibleReport.totalKm)} km`);
+  drawPdfInfoBox(doc, margin + 178, y, 150, "Jornadas", visibleReport.routeCount);
+  drawPdfInfoBox(doc, margin + 336, y, 150, "Personas", visibleReport.peopleCount);
+  drawPdfInfoBox(doc, margin + 494, y, 276, "Dia mas productivo", productiveDay ? `${formatDistanceDay(productiveDay.day)} | ${productiveDay.stops} visitas` : "Sin datos");
+  y += 58;
+  setPdfFont(doc, 11, true);
+  doc.text("Detalle de tramos", margin, y);
+  y += 15;
+
+  if (!visibleReport.routes.length) {
+    doc.setFillColor(245, 249, 255);
+    doc.roundedRect(margin, y, width - margin * 2, 46, 4, 4, "F");
+    setPdfFont(doc, 9, false, "#65758b");
+    doc.text("No hay recorridos para el filtro seleccionado.", margin + 12, y + 27);
+  }
+
+  for (const route of visibleReport.routes) {
+    if (y + 68 > height - margin) startPage();
+    drawRouteHeader(route.userName, route.day, route.stops, route.distanceKm);
+
+    if (!route.legs.length) {
+      doc.setFillColor(249, 251, 253);
+      doc.rect(margin, y, width - margin * 2, 24, "F");
+      setPdfFont(doc, 7, false, "#65758b");
+      doc.text("Una visita registrada, sin un segundo espacio para calcular distancia.", margin + 10, y + 15);
+      y += 30;
+      continue;
+    }
+
+    for (const leg of route.legs) {
+      if (y + 26 > height - margin) {
+        startPage();
+        drawRouteHeader(route.userName, route.day, route.stops, route.distanceKm, true);
+      }
+      doc.setFillColor(249, 251, 253);
+      doc.rect(margin, y, width - margin * 2, 24, "F");
+      setPdfFont(doc, 7.2, false, "#26384f");
+      doc.text(fitPdfText(doc, leg.fromSpaceName, 310), margin + 10, y + 15);
+      doc.text(fitPdfText(doc, leg.toSpaceName, 310), margin + 350, y + 15);
+      setPdfFont(doc, 7.2, true, "#0759b8");
+      doc.text(`${formatEstimatedKm(leg.distanceKm)} km`, width - margin - 10, y + 15, { align: "right" });
+      y += 27;
+    }
+    y += 8;
+  }
+
+  if (y + 34 > height - margin) startPage();
+  doc.setFillColor(255, 249, 232);
+  doc.roundedRect(margin, y, width - margin * 2, 30, 4, 4, "F");
+  setPdfFont(doc, 6.8, false, "#7c5a18");
+  doc.text("Las distancias son lineales y estimadas entre las ubicaciones registradas en el padron. No representan el trayecto exacto por calles.", margin + 10, y + 18);
+
+  const daySuffix = selectedDay === "all" ? month : selectedDay;
+  downloadPdfFile(doc, `recorridos-${slug(title)}-${daySuffix}.pdf`);
+}
+
 async function downloadEvidenceBookPdf({ month, period, report, currentUser }: { month: string; period: string; report: ProviderRow; currentUser: UserProfile }) {
   const { doc, logo } = await createBrandedPdf();
   const width = doc.internal.pageSize.getWidth();
@@ -905,6 +1036,15 @@ function drawAuditTableHeader(doc: jsPDF, y: number) {
   doc.text("C3", 538, y + 12);
   doc.text("Fecha 3", 570, y + 12);
   doc.text("Fotos", 778, y + 12);
+}
+
+function drawDistanceTableHeader(doc: jsPDF, y: number) {
+  doc.setFillColor(18, 46, 82);
+  doc.rect(36, y, 770, 17, "F");
+  setPdfFont(doc, 6.5, true, "#ffffff");
+  doc.text("Desde", 46, y + 11);
+  doc.text("Hasta", 386, y + 11);
+  doc.text("Distancia", 792, y + 11, { align: "right" });
 }
 
 type PdfPhoto = {

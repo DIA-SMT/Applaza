@@ -14,6 +14,7 @@ build/
 tmp/
 .agents/
 *.log
+*.tsbuildinfo
 
 # OS and editor files
 .DS_Store

@@ -2,20 +2,22 @@
 
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
-import { Building2, Camera, Check, ChevronRight, ClipboardCheck, Eye, FileText, LayoutDashboard, LoaderCircle, LogOut, Map, MapPin, Menu, MessageSquarePlus, Save, Search, Trees, TriangleAlert, UsersRound, X } from "lucide-react";
+import { Building2, Camera, Check, ChevronRight, ClipboardCheck, Eye, FileText, LayoutDashboard, LoaderCircle, LogOut, Map, MapPin, Menu, MessageSquarePlus, Route, Save, Search, Trees, TriangleAlert, UsersRound, X } from "lucide-react";
 import type { MaintenancePhoto, MaintenanceTask, Provider, SpaceRecord, UserProfile } from "@/types/domain";
+import { buildEstimatedDistanceReport, formatEstimatedKm, type EstimatedDistanceReport } from "@/lib/estimated-distance";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
 import { photoTypeLabel } from "@/lib/photo-label";
 import { AuditDashboard } from "./audit-dashboard";
 import { AssistantChat } from "./assistant-chat";
 import { ControlRegister } from "./control-register";
+import { DistanceReportContent } from "./distance-report-content";
 import { OperationalMap } from "./operational-map";
 import { PhotoUpload } from "./photo-upload";
 import { ProviderRating } from "./provider-rating";
 import { SpaceDetail } from "./space-detail";
 
 type View = "dashboard" | "map" | "control" | "audit";
-type MetricKey = "all" | "mapped" | "pending" | "evidence" | "providers";
+type MetricKey = "all" | "mapped" | "pending" | "evidence" | "distance" | "providers";
 const DOCUMENT_SPACE_TOTAL = 218;
 type SupervisorObservation = {
   id: string;
@@ -27,18 +29,20 @@ type SupervisorObservation = {
   created_at: string;
 };
 
-export function DashboardView({ initialSpaces, providers, currentUser, dataError }: { initialSpaces: SpaceRecord[]; providers: Provider[]; currentUser: UserProfile; dataError: string | null }) {
+export function DashboardView({ initialSpaces, providers, currentUser, userProfiles, dataError }: { initialSpaces: SpaceRecord[]; providers: Provider[]; currentUser: UserProfile; userProfiles: UserProfile[]; dataError: string | null }) {
   const isAuditorOnly = currentUser.role === "auditor";
   const canSeeAudit = currentUser.role === "admin" || currentUser.role === "auditor";
   const [view, setView] = useState<View>(isAuditorOnly ? "audit" : "dashboard");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [spaces, setSpaces] = useState(initialSpaces);
   const [locateSpaceId, setLocateSpaceId] = useState<string>();
+  const distanceReport = useMemo(() => buildEstimatedDistanceReport(spaces, userProfiles, currentUser, currentMonth()), [spaces, userProfiles, currentUser]);
   const stats = [
     { key: "all" as const, label: "Espacios del documento", value: DOCUMENT_SPACE_TOTAL, icon: Trees, tone: "blue" },
     { key: "mapped" as const, label: "Con ubicacion", value: spaces.filter((space) => space.latitude != null && space.longitude != null).length, icon: Map, tone: "cyan" },
     { key: "pending" as const, label: "Pendientes de ubicar", value: spaces.filter((space) => space.latitude == null || space.longitude == null).length, icon: TriangleAlert, tone: "red" },
     { key: "evidence" as const, label: "Evidencias cargadas", value: spaces.reduce((total, space) => total + space.photos.length, 0), icon: ClipboardCheck, tone: "green" },
+    { key: "distance" as const, label: "Distancia estimada", value: `${formatEstimatedKm(distanceReport.totalKm)} km`, icon: Route, tone: "amber" },
     { key: "providers" as const, label: "Cooperativas activas", value: providers.filter((provider) => provider.active).length, icon: UsersRound, tone: "purple" },
   ];
   const latestPhotos = spaces.flatMap((space) => space.photos.map((photo) => ({ ...photo, spaceName: space.name }))).sort((left, right) => right.created_at.localeCompare(left.created_at));
@@ -93,6 +97,7 @@ export function DashboardView({ initialSpaces, providers, currentUser, dataError
             spaces={spaces}
             providers={providers}
             currentUser={currentUser}
+            userProfiles={userProfiles}
             mode={canSeeAudit ? "audit" : "reports"}
             onPhotoDeleted={canSeeAudit ? (photoId) => setSpaces((current) => current.map((space) => space.photos.some((photo) => photo.id === photoId) ? { ...space, photos: space.photos.filter((photo) => photo.id !== photoId) } : space)) : undefined}
           />
@@ -100,7 +105,7 @@ export function DashboardView({ initialSpaces, providers, currentUser, dataError
         ? <OperationalMap spaces={spaces} providers={providers} currentUser={currentUser} dataError={dataError} setSpaces={setSpaces} locateSpaceId={locateSpaceId} />
         : view === "control"
           ? <ControlRegister providers={providers} spaces={spaces} />
-          : <Dashboard spaces={spaces} providers={providers} currentUser={currentUser} stats={stats} latestPhotos={latestPhotos} dataError={dataError} onPhoto={addPhoto} onOpenMap={() => changeView("map")} onOpenReports={() => changeView("audit")} onUpdateSpace={(updated) => setSpaces((current) => current.map((space) => space.id === updated.id ? updated : space))} onLocateSpace={locateFromDashboard} />}
+          : <Dashboard spaces={spaces} providers={providers} currentUser={currentUser} stats={stats} distanceReport={distanceReport} latestPhotos={latestPhotos} dataError={dataError} onPhoto={addPhoto} onOpenMap={() => changeView("map")} onOpenReports={() => changeView("audit")} onUpdateSpace={(updated) => setSpaces((current) => current.map((space) => space.id === updated.id ? updated : space))} onLocateSpace={locateFromDashboard} />}
       <AssistantChat />
     </main>
   </div>;
@@ -145,6 +150,7 @@ function Dashboard({
   providers,
   currentUser,
   stats,
+  distanceReport,
   latestPhotos,
   dataError,
   onPhoto,
@@ -156,7 +162,8 @@ function Dashboard({
   spaces: SpaceRecord[];
   providers: Provider[];
   currentUser: UserProfile;
-  stats: Array<{ key: MetricKey; label: string; value: number; icon: typeof Trees; tone: string }>;
+  stats: Array<{ key: MetricKey; label: string; value: number | string; icon: typeof Trees; tone: string }>;
+  distanceReport: EstimatedDistanceReport;
   latestPhotos: Array<{ id: string; image_url: string; photo_type: string; spaceName: string }>;
   dataError: string | null;
   onPhoto: (photo: MaintenancePhoto, spaceId?: string, task?: MaintenanceTask) => void;
@@ -174,7 +181,7 @@ function Dashboard({
     <div className="page-heading dashboard-heading"><div><p>PADRON MUNICIPAL</p><h1>Estado general</h1><span>Seguimiento de espacios verdes cargados desde el documento.</span></div><div className="page-actions"><button className="secondary-action" onClick={onOpenReports}><FileText size={17} />Informes</button><button className="primary" onClick={onOpenMap}><Map size={17} />Abrir mapa</button></div></div>
     {dataError && <div className="dashboard-error"><TriangleAlert size={18} /><div><strong>No se pudieron actualizar los datos</strong><span>{dataError}</span></div></div>}
     <div className="stats-grid">{stats.map(({ key, label, value, icon: Icon, tone }) => <button className={`stat-card ${activeMetric === key ? "active" : ""}`} key={label} onClick={() => setActiveMetric(key)}><div className={`stat-icon ${tone}`}><Icon /></div><div><span>{label}</span><strong>{value}</strong></div><ChevronRight size={16} /></button>)}</div>
-    <MetricDetailPanel metric={activeMetric} spaces={spaces} providers={providers} onOpenMap={onOpenMap} onSelectSpace={(space) => setSelectedSpaceId(space.id)} onLocateSpace={onLocateSpace} />
+    <MetricDetailPanel metric={activeMetric} spaces={spaces} providers={providers} distanceReport={distanceReport} onOpenMap={onOpenMap} onSelectSpace={(space) => setSelectedSpaceId(space.id)} onLocateSpace={onLocateSpace} />
     <div className="dashboard-grid">
       <section className="card"><div className="card-title"><div><h2>Espacios cargados</h2><p>Primeros registros disponibles del documento</p></div><button onClick={onOpenMap}>Ver mapa <ChevronRight size={16} /></button></div>{listedSpaces.length ? <div className="task-list">{listedSpaces.map((space) => <button key={space.id} onClick={onOpenMap}><span className="space-dot" /><div><strong>{space.name}</strong><small>{space.provider?.name || "Sin cooperativa asignada"}</small></div><span className="space-section-label">{space.section_code ? `Seccion ${space.section_code}` : space.source_type || "Espacio"}</span><ChevronRight size={17} /></button>)}</div> : <p className="dashboard-empty">No hay espacios cargados.</p>}</section>
       <section className="card evidence-card"><div className="card-title"><div><h2>Cargar evidencia</h2><p>Foto tomada en campo y asociada al espacio verde</p></div><Camera size={20} /></div><PhotoUpload spaces={spaces} onUploaded={onPhoto} /></section>
@@ -189,6 +196,7 @@ function MetricDetailPanel({
   metric,
   spaces,
   providers,
+  distanceReport,
   onOpenMap,
   onSelectSpace,
   onLocateSpace,
@@ -196,6 +204,7 @@ function MetricDetailPanel({
   metric: MetricKey;
   spaces: SpaceRecord[];
   providers: Provider[];
+  distanceReport: EstimatedDistanceReport;
   onOpenMap: () => void;
   onSelectSpace: (space: SpaceRecord) => void;
   onLocateSpace: (space: SpaceRecord) => void;
@@ -237,6 +246,8 @@ function MetricDetailPanel({
     setEvidenceFilter("con");
     if (metric !== "providers") setSelectedProviderId(undefined);
   }, [metric]);
+
+  if (metric === "distance") return <DistanceDetailPanel report={distanceReport} onOpenMap={onOpenMap} />;
 
   return <section className="dashboard-metric-panel">
     <div className="metric-panel-head">
@@ -293,8 +304,25 @@ function metricContent(metric: MetricKey) {
   if (metric === "mapped") return { eyebrow: "GEORREFERENCIADOS", title: "Espacios con ubicación", description: "Listado completo de registros que ya tienen coordenadas cargadas." };
   if (metric === "pending") return { eyebrow: "ACCIÓN REQUERIDA", title: "Pendientes de ubicar", description: "Seleccioná un espacio para abrir el mapa y guardar su ubicación manual." };
   if (metric === "evidence") return { eyebrow: "EVIDENCIAS", title: "Espacios con fotos cargadas", description: "Control de registros con evidencia fotográfica asociada." };
+  if (metric === "distance") return { eyebrow: "RECORRIDOS", title: "Distancia estimada", description: "Suma lineal de los tramos entre espacios con evidencias consecutivas." };
   if (metric === "providers") return { eyebrow: "COOPERATIVAS", title: "Cooperativas activas", description: "Resumen por cooperativa y acceso a sus espacios asignados." };
   return { eyebrow: "PADRÓN", title: "Espacios del documento", description: "Todos los espacios cargados desde el documento municipal." };
+}
+
+function DistanceDetailPanel({ report, onOpenMap }: { report: EstimatedDistanceReport; onOpenMap: () => void }) {
+  const [selectedDay, setSelectedDay] = useState("all");
+
+  return <section className="dashboard-metric-panel distance-panel">
+    <div className="metric-panel-head">
+      <div>
+        <p>RECORRIDOS</p>
+        <h2>Distancia estimada de {formatMonth(report.periodMonth)}</h2>
+        <span>Calculada entre espacios con evidencias consecutivas, separada por persona y jornada.</span>
+      </div>
+      <button onClick={onOpenMap}><Map size={16} />Abrir mapa operativo</button>
+    </div>
+    <DistanceReportContent report={report} selectedDay={selectedDay} onDayChange={setSelectedDay} />
+  </section>;
 }
 
 function normalizeQuery(value: string) {

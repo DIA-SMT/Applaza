@@ -13,5 +13,12 @@ export default async function Home() {
   const { data: profile } = await supabase.from("profiles").select("id,full_name,role,provider_id").eq("id", user.id).single();
   const { spaces, providers, error } = await getDashboardData(supabase);
   const currentUser: UserProfile = profile ? { ...profile, email: user.email } as UserProfile : { id: user.id, full_name: user.email?.split("@")[0] || "Usuario", role: "provider", provider_id: null, email: user.email };
-  return <DashboardView initialSpaces={spaces} providers={providers} currentUser={currentUser} dataError={error} />;
+  let userProfiles: UserProfile[] = [currentUser];
+
+  if (currentUser.role === "admin") {
+    const { data: profiles } = await supabase.from("profiles").select("id,full_name,role,provider_id").order("full_name");
+    if (profiles?.length) userProfiles = profiles as UserProfile[];
+  }
+
+  return <DashboardView initialSpaces={spaces} providers={providers} currentUser={currentUser} userProfiles={userProfiles} dataError={error} />;
 }
