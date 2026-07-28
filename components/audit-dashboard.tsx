@@ -38,6 +38,7 @@ type AuditObservation = {
 };
 type AuditObservationItem = AuditObservation & { space?: SpaceRecord };
 type PhotoViewerItem = { id: string; url: string; type: string; createdAt: string; title: string; subtitle: string };
+type PhotoViewerState = { items: PhotoViewerItem[]; index: number };
 const controlKeys = ["control_1", "control_2", "control_3"] as const;
 
 export function AuditDashboard({ spaces, providers, currentUser, userProfiles, onPhotoDeleted, mode = "audit" }: { spaces: SpaceRecord[]; providers: Provider[]; currentUser: UserProfile; userProfiles: UserProfile[]; onPhotoDeleted?: (photoId: string) => void; mode?: "audit" | "reports" }) {
@@ -53,7 +54,7 @@ export function AuditDashboard({ spaces, providers, currentUser, userProfiles, o
   const [observationsError, setObservationsError] = useState<string | null>(null);
   const [selectedEvidenceSpaceId, setSelectedEvidenceSpaceId] = useState("");
   const [selectedDistanceDay, setSelectedDistanceDay] = useState("all");
-  const [photoViewer, setPhotoViewer] = useState<PhotoViewerItem>();
+  const [photoViewer, setPhotoViewer] = useState<PhotoViewerState>();
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState("");
@@ -152,6 +153,7 @@ export function AuditDashboard({ spaces, providers, currentUser, userProfiles, o
   const periodLabel = formatMonth(month);
   const canExport = activeMetric === "observed" ? observationItems.length > 0 : activeMetric === "distance" ? visibleDistanceReport.routes.length > 0 : reportView.spacesDetail.length > 0;
   const exportLabel = activeMetric === "evidence" ? "Descargar book" : activeMetric === "observed" ? "Descargar observaciones" : activeMetric === "distance" ? "Descargar recorrido" : "Descargar PDF";
+  const viewerPhoto = photoViewer?.items[photoViewer.index];
 
   useEffect(() => {
     setSelectedEvidenceSpaceId("");
@@ -160,14 +162,28 @@ export function AuditDashboard({ spaces, providers, currentUser, userProfiles, o
 
   useEffect(() => {
     if (!photoViewer) return;
-    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") closeViewer(); };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeViewer();
+      if (event.key === "ArrowLeft") movePhoto(-1);
+      if (event.key === "ArrowRight") movePhoto(1);
+    };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [photoViewer]);
 
-  function openPhoto(item: PhotoViewerItem) {
-    setPhotoViewer(item);
+  function openPhoto(item: PhotoViewerItem, gallery: PhotoViewerItem[] = [item]) {
+    const index = Math.max(0, gallery.findIndex((galleryItem) => galleryItem.id === item.id));
+    setPhotoViewer({ items: gallery, index });
+    setDeleteConfirm(false);
+    setDeleteError("");
+  }
+
+  function movePhoto(direction: -1 | 1) {
+    setPhotoViewer((current) => {
+      if (!current || current.items.length < 2) return current;
+      return { ...current, index: (current.index + direction + current.items.length) % current.items.length };
+    });
     setDeleteConfirm(false);
     setDeleteError("");
   }
@@ -181,23 +197,24 @@ export function AuditDashboard({ spaces, providers, currentUser, userProfiles, o
 
   async function deleteViewerPhoto() {
     if (!photoViewer) return;
+    const viewerPhoto = photoViewer.items[photoViewer.index];
     setDeleteBusy(true);
     setDeleteError("");
     const supabase = getSupabaseBrowserClient();
     if (!supabase) { setDeleteError("Supabase no esta configurado."); setDeleteBusy(false); return; }
-    const { error: deleteRowError } = await supabase.from("maintenance_photos").delete().eq("id", photoViewer.id);
+    const { error: deleteRowError } = await supabase.from("maintenance_photos").delete().eq("id", viewerPhoto.id);
     if (deleteRowError) {
       setDeleteError(/policy|permission|denied|row-level/i.test(deleteRowError.message) ? "La base todavia no permite borrar evidencias: hay que ejecutar supabase/staff_delete_photos.sql en Supabase." : deleteRowError.message);
       setDeleteBusy(false);
       return;
     }
     const marker = "/maintenance-photos/";
-    const markerIndex = photoViewer.url.indexOf(marker);
+    const markerIndex = viewerPhoto.url.indexOf(marker);
     if (markerIndex >= 0) {
-      const storagePath = decodeURIComponent(photoViewer.url.slice(markerIndex + marker.length).split("?")[0]);
+      const storagePath = decodeURIComponent(viewerPhoto.url.slice(markerIndex + marker.length).split("?")[0]);
       await supabase.storage.from("maintenance-photos").remove([storagePath]);
     }
-    onPhotoDeleted?.(photoViewer.id);
+    onPhotoDeleted?.(viewerPhoto.id);
     setDeleteBusy(false);
     setDeleteConfirm(false);
     setPhotoViewer(undefined);
@@ -381,11 +398,18 @@ export function AuditDashboard({ spaces, providers, currentUser, userProfiles, o
       </div>
     </section>
 
-    {photoViewer && <div className="photo-lightbox" role="dialog" aria-modal="true" aria-label={`Evidencia de ${photoViewer.title}`} onClick={closeViewer}>
+    {photoViewer && viewerPhoto && <div className="photo-lightbox" role="dialog" aria-modal="true" aria-label={`Evidencia de ${viewerPhoto.title}`} onClick={closeViewer}>
       <div className="photo-lightbox-panel" onClick={(event) => event.stopPropagation()}>
-        <img src={photoViewer.url} alt={`${photoViewer.title} - ${photoTypeLabel(photoViewer.type)}`} />
+        <div className="photo-lightbox-stage">
+          <img src={viewerPhoto.url} alt={`${viewerPhoto.title} - ${photoTypeLabel(viewerPhoto.type)}`} />
+          {photoViewer.items.length > 1 && <>
+            <button className="photo-lightbox-nav previous" onClick={() => movePhoto(-1)} aria-label="Foto anterior"><ChevronLeft size={22} /></button>
+            <button className="photo-lightbox-nav next" onClick={() => movePhoto(1)} aria-label="Foto siguiente"><ChevronRight size={22} /></button>
+            <span className="photo-lightbox-count">{photoViewer.index + 1} / {photoViewer.items.length}</span>
+          </>}
+        </div>
         <div className="photo-lightbox-bar">
-          <div><strong>{photoViewer.title}</strong><span>{photoTypeLabel(photoViewer.type)} · {formatDate(photoViewer.createdAt)} {formatTime(photoViewer.createdAt)}{photoViewer.subtitle ? ` · ${photoViewer.subtitle}` : ""}</span></div>
+          <div><strong>{viewerPhoto.title}</strong><span>{photoTypeLabel(viewerPhoto.type)} · {formatDate(viewerPhoto.createdAt)} {formatTime(viewerPhoto.createdAt)}{viewerPhoto.subtitle ? ` · ${viewerPhoto.subtitle}` : ""}</span></div>
           <div className="photo-lightbox-actions">
             {canDeletePhotos && !deleteConfirm && <button className="photo-delete" onClick={() => setDeleteConfirm(true)}><Trash2 size={15} />Eliminar</button>}
             {canDeletePhotos && deleteConfirm && <>
@@ -411,10 +435,11 @@ function AuditStat({ icon: Icon, label, value, note, tone = "default", active, o
   </button>;
 }
 
-function EvidenceGallery({ spaces, selectedId, onSelect, empty, onOpenPhoto }: { spaces: ProviderRow["spacesDetail"]; selectedId: string; onSelect: (id: string) => void; empty: string; onOpenPhoto: (photo: PhotoViewerItem) => void }) {
+function EvidenceGallery({ spaces, selectedId, onSelect, empty, onOpenPhoto }: { spaces: ProviderRow["spacesDetail"]; selectedId: string; onSelect: (id: string) => void; empty: string; onOpenPhoto: (photo: PhotoViewerItem, gallery?: PhotoViewerItem[]) => void }) {
   const selectedSpace = spaces.find((space) => space.id === selectedId) ?? spaces[0];
   const photoGroups = selectedSpace ? groupPhotosByDate(selectedSpace.photoItems) : [];
   const controlGroups = selectedSpace ? groupPhotosByControl(selectedSpace.photoItems) : [];
+  const selectedGallery = selectedSpace?.photoItems.map((photo) => toViewerItem(photo, selectedSpace.name, selectedSpace.providerName || "")) ?? [];
 
   if (!spaces.length) return <p className="dashboard-empty">{empty}</p>;
 
@@ -422,10 +447,11 @@ function EvidenceGallery({ spaces, selectedId, onSelect, empty, onOpenPhoto }: {
     <div className="audit-gallery-grid">
       {spaces.map((space) => {
         const cover = space.photoItems[0];
+        const gallery = space.photoItems.map((photo) => toViewerItem(photo, space.name, space.providerName || ""));
         const latestDate = cover?.createdAt ?? space.date;
         const isActive = selectedSpace?.id === space.id;
         return <article key={space.id} className={`audit-gallery-card ${isActive ? "active" : ""}`}>
-          <button onClick={() => onSelect(space.id)} aria-pressed={isActive}>
+          <button onClick={() => { onSelect(space.id); if (gallery[0]) onOpenPhoto(gallery[0], gallery); }} aria-pressed={isActive}>
             <div className="audit-gallery-cover">
               {cover ? <img src={cover.url} alt={space.name} /> : <span>Sin foto</span>}
               <div><Camera size={24} /><b>{space.photos} {space.photos === 1 ? "foto" : "fotos"}</b></div>
@@ -461,7 +487,7 @@ function EvidenceGallery({ spaces, selectedId, onSelect, empty, onOpenPhoto }: {
           </div>
           <div className="audit-photo-book-grid">
             {group.photos.map((photo) => <figure key={photo.id}>
-              <button className="photo-thumb" onClick={() => onOpenPhoto({ id: photo.id, url: photo.url, type: photo.type, createdAt: photo.createdAt, title: selectedSpace.name, subtitle: selectedSpace.providerName || "" })} aria-label={`Ver foto de ${selectedSpace.name} en grande`}>
+              <button className="photo-thumb" onClick={() => onOpenPhoto(toViewerItem(photo, selectedSpace.name, selectedSpace.providerName || ""), selectedGallery)} aria-label={`Ver foto de ${selectedSpace.name} en grande`}>
                 <img src={photo.url} alt={`${selectedSpace.name} - ${photo.type}`} />
               </button>
               <figcaption>
@@ -474,6 +500,10 @@ function EvidenceGallery({ spaces, selectedId, onSelect, empty, onOpenPhoto }: {
       </div>
     </section>}
   </div>;
+}
+
+function toViewerItem(photo: { id: string; url: string; type: string; createdAt: string }, title: string, subtitle: string): PhotoViewerItem {
+  return { id: photo.id, url: photo.url, type: photo.type, createdAt: photo.createdAt, title, subtitle };
 }
 
 function AuditObservationReview({ items, error }: { items: Array<AuditObservation & { space?: SpaceRecord }>; error: string | null }) {
