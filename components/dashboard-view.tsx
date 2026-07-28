@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
-import { Building2, Camera, Check, ChevronRight, ClipboardCheck, Eye, LayoutDashboard, LoaderCircle, LogOut, Map, MapPin, Menu, MessageSquarePlus, Save, Search, Trees, TriangleAlert, UsersRound, X } from "lucide-react";
+import { Building2, Camera, Check, ChevronRight, ClipboardCheck, Eye, FileText, LayoutDashboard, LoaderCircle, LogOut, Map, MapPin, Menu, MessageSquarePlus, Save, Search, Trees, TriangleAlert, UsersRound, X } from "lucide-react";
 import type { MaintenancePhoto, MaintenanceTask, Provider, SpaceRecord, UserProfile } from "@/types/domain";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
 import { photoTypeLabel } from "@/lib/photo-label";
@@ -49,7 +49,6 @@ export function DashboardView({ initialSpaces, providers, currentUser, dataError
   }
 
   function changeView(nextView: View) {
-    if (nextView === "audit" && !canSeeAudit) return;
     if (isAuditorOnly && nextView !== "audit") return;
     if (nextView !== "map") setLocateSpaceId(undefined);
     setView(nextView);
@@ -86,16 +85,22 @@ export function DashboardView({ initialSpaces, providers, currentUser, dataError
     <main className="main">
       <header className="topbar">
         <button className="mobile-menu" onClick={() => setMobileNavOpen(true)} aria-label="Abrir menu"><Menu /></button>
-        <div><span>San Miguel de Tucuman</span><strong>{viewTitle(view)}</strong></div>
+        <div><span>San Miguel de Tucuman</span><strong>{viewTitle(view, currentUser.role)}</strong></div>
         <div className="user"><span>{currentUser.full_name.slice(0, 2).toUpperCase()}</span><div><strong>{currentUser.full_name}</strong><small>{roleLabel(currentUser.role)}</small></div><button className="logout-button" onClick={signOut} title="Cerrar sesion"><LogOut size={17} /></button></div>
       </header>
-      {view === "audit" && canSeeAudit
-        ? <AuditDashboard spaces={spaces} providers={providers} currentUser={currentUser} onPhotoDeleted={(photoId) => setSpaces((current) => current.map((space) => space.photos.some((photo) => photo.id === photoId) ? { ...space, photos: space.photos.filter((photo) => photo.id !== photoId) } : space))} />
+      {view === "audit"
+        ? <AuditDashboard
+            spaces={spaces}
+            providers={providers}
+            currentUser={currentUser}
+            mode={canSeeAudit ? "audit" : "reports"}
+            onPhotoDeleted={canSeeAudit ? (photoId) => setSpaces((current) => current.map((space) => space.photos.some((photo) => photo.id === photoId) ? { ...space, photos: space.photos.filter((photo) => photo.id !== photoId) } : space)) : undefined}
+          />
         : view === "map"
         ? <OperationalMap spaces={spaces} providers={providers} currentUser={currentUser} dataError={dataError} setSpaces={setSpaces} locateSpaceId={locateSpaceId} />
         : view === "control"
           ? <ControlRegister providers={providers} spaces={spaces} />
-          : <Dashboard spaces={spaces} providers={providers} currentUser={currentUser} stats={stats} latestPhotos={latestPhotos} dataError={dataError} onPhoto={addPhoto} onOpenMap={() => changeView("map")} onUpdateSpace={(updated) => setSpaces((current) => current.map((space) => space.id === updated.id ? updated : space))} onLocateSpace={locateFromDashboard} />}
+          : <Dashboard spaces={spaces} providers={providers} currentUser={currentUser} stats={stats} latestPhotos={latestPhotos} dataError={dataError} onPhoto={addPhoto} onOpenMap={() => changeView("map")} onOpenReports={() => changeView("audit")} onUpdateSpace={(updated) => setSpaces((current) => current.map((space) => space.id === updated.id ? updated : space))} onLocateSpace={locateFromDashboard} />}
       <AssistantChat />
     </main>
   </div>;
@@ -113,7 +118,10 @@ function AppNav({ view, onChange, role }: { view: View; onChange: (view: View) =
     {!auditorOnly && <button className={view === "dashboard" ? "active" : ""} onClick={() => onChange("dashboard")}><LayoutDashboard />Resumen</button>}
     {!auditorOnly && <button className={view === "map" ? "active" : ""} onClick={() => onChange("map")}><Map />Mapa operativo</button>}
     {!auditorOnly && <button className={view === "control" ? "active" : ""} onClick={() => onChange("control")}><ClipboardCheck />Registro de control</button>}
-    {canAudit && <button className={view === "audit" ? "active" : ""} onClick={() => onChange("audit")}><Eye />Auditoria</button>}
+    <button className={view === "audit" ? "active" : ""} onClick={() => onChange("audit")}>
+      {canAudit ? <Eye /> : <FileText />}
+      {canAudit ? "Auditoria" : "Informes"}
+    </button>
   </nav>;
 }
 
@@ -125,11 +133,11 @@ function roleLabel(role: UserProfile["role"]) {
   return "Proveedor";
 }
 
-function viewTitle(view: View) {
+function viewTitle(view: View, role: UserProfile["role"]) {
   if (view === "dashboard") return "Panel de control";
   if (view === "map") return "Mapa operativo";
   if (view === "control") return "Registro de control";
-  return "Auditoria";
+  return role === "admin" || role === "auditor" ? "Auditoria" : "Informes";
 }
 
 function Dashboard({
@@ -141,6 +149,7 @@ function Dashboard({
   dataError,
   onPhoto,
   onOpenMap,
+  onOpenReports,
   onUpdateSpace,
   onLocateSpace,
 }: {
@@ -152,6 +161,7 @@ function Dashboard({
   dataError: string | null;
   onPhoto: (photo: MaintenancePhoto, spaceId?: string, task?: MaintenanceTask) => void;
   onOpenMap: () => void;
+  onOpenReports: () => void;
   onUpdateSpace: (space: SpaceRecord) => void;
   onLocateSpace: (space: SpaceRecord) => void;
 }) {
@@ -161,7 +171,7 @@ function Dashboard({
   const listedSpaces = [...spaces].sort((left, right) => left.name.localeCompare(right.name, "es")).slice(0, 6);
 
   return <div className="content dashboard">
-    <div className="page-heading"><div><p>PADRON MUNICIPAL</p><h1>Estado general</h1><span>Seguimiento de espacios verdes cargados desde el documento.</span></div><button className="primary" onClick={onOpenMap}><Map size={17} />Abrir mapa</button></div>
+    <div className="page-heading dashboard-heading"><div><p>PADRON MUNICIPAL</p><h1>Estado general</h1><span>Seguimiento de espacios verdes cargados desde el documento.</span></div><div className="page-actions"><button className="secondary-action" onClick={onOpenReports}><FileText size={17} />Informes</button><button className="primary" onClick={onOpenMap}><Map size={17} />Abrir mapa</button></div></div>
     {dataError && <div className="dashboard-error"><TriangleAlert size={18} /><div><strong>No se pudieron actualizar los datos</strong><span>{dataError}</span></div></div>}
     <div className="stats-grid">{stats.map(({ key, label, value, icon: Icon, tone }) => <button className={`stat-card ${activeMetric === key ? "active" : ""}`} key={label} onClick={() => setActiveMetric(key)}><div className={`stat-icon ${tone}`}><Icon /></div><div><span>{label}</span><strong>{value}</strong></div><ChevronRight size={16} /></button>)}</div>
     <MetricDetailPanel metric={activeMetric} spaces={spaces} providers={providers} onOpenMap={onOpenMap} onSelectSpace={(space) => setSelectedSpaceId(space.id)} onLocateSpace={onLocateSpace} />

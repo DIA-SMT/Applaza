@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import type { jsPDF } from "jspdf";
 import { AlertCircle, CalendarDays, Camera, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Download, FileSearch, ListFilter, LoaderCircle, MessageSquarePlus, ShieldCheck, Trash2, TriangleAlert, X } from "lucide-react";
 import type { Provider, SpaceRecord, UserProfile } from "@/types/domain";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
 import { photoTypeLabel } from "@/lib/photo-label";
+import { createBrandedPdf, downloadPdfFile, drawPdfHeader, drawPdfInfoBox, fitPdfText, setPdfFont } from "@/lib/branded-pdf";
 
 type ControlValue = "si" | "no" | null;
 type ControlRecord = {
@@ -36,7 +38,7 @@ type AuditObservationItem = AuditObservation & { space?: SpaceRecord };
 type PhotoViewerItem = { id: string; url: string; type: string; createdAt: string; title: string; subtitle: string };
 const controlKeys = ["control_1", "control_2", "control_3"] as const;
 
-export function AuditDashboard({ spaces, providers, currentUser, onPhotoDeleted }: { spaces: SpaceRecord[]; providers: Provider[]; currentUser: UserProfile; onPhotoDeleted?: (photoId: string) => void }) {
+export function AuditDashboard({ spaces, providers, currentUser, onPhotoDeleted, mode = "audit" }: { spaces: SpaceRecord[]; providers: Provider[]; currentUser: UserProfile; onPhotoDeleted?: (photoId: string) => void; mode?: "audit" | "reports" }) {
   const [month, setMonth] = useState(currentMonth());
   const [records, setRecords] = useState<ControlRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -44,6 +46,7 @@ export function AuditDashboard({ spaces, providers, currentUser, onPhotoDeleted 
   const [selectedProviderId, setSelectedProviderId] = useState<string>("all");
   const [activeMetric, setActiveMetric] = useState<MetricKey>("assigned");
   const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState("");
   const [observations, setObservations] = useState<AuditObservation[]>([]);
   const [observationsError, setObservationsError] = useState<string | null>(null);
   const [selectedEvidenceSpaceId, setSelectedEvidenceSpaceId] = useState("");
@@ -51,7 +54,7 @@ export function AuditDashboard({ spaces, providers, currentUser, onPhotoDeleted 
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState("");
-  const canDeletePhotos = currentUser.role === "admin" || currentUser.role === "supervisor" || currentUser.role === "auditor";
+  const canDeletePhotos = mode === "audit" && (currentUser.role === "admin" || currentUser.role === "supervisor" || currentUser.role === "auditor");
 
   useEffect(() => {
     let active = true;
@@ -137,7 +140,7 @@ export function AuditDashboard({ spaces, providers, currentUser, onPhotoDeleted 
   const commandSummary = activeMetric === "observed" ? `${observationItems.length} observaciones cargadas por supervision` : reportView.summary;
   const periodLabel = formatMonth(month);
   const canExport = activeMetric === "observed" ? observationItems.length > 0 : reportView.spacesDetail.length > 0;
-  const exportLabel = activeMetric === "evidence" ? "Exportar book" : activeMetric === "observed" ? "Exportar observaciones" : "Exportar PDF";
+  const exportLabel = activeMetric === "evidence" ? "Descargar book" : activeMetric === "observed" ? "Descargar observaciones" : "Descargar PDF";
 
   useEffect(() => {
     setSelectedEvidenceSpaceId("");
@@ -210,25 +213,28 @@ export function AuditDashboard({ spaces, providers, currentUser, onPhotoDeleted 
 
   async function exportReport() {
     setExporting(true);
+    setExportError("");
     try {
       if (activeMetric === "observed") {
-        downloadObservationsPdf({ month, period: periodLabel, title: report.title, observations: observationItems, currentUser });
+        await downloadObservationsPdf({ month, period: periodLabel, title: report.title, observations: observationItems, currentUser });
       } else if (activeMetric === "evidence") {
         await downloadEvidenceBookPdf({ month, period: periodLabel, report: { ...report, spacesDetail: reportView.spacesDetail }, currentUser });
       } else {
-        downloadAuditPdf({ filterTitle: reportView.title, month, period: periodLabel, report: { ...report, spacesDetail: reportView.spacesDetail }, currentUser });
+        await downloadAuditPdf({ filterTitle: reportView.title, month, period: periodLabel, report: { ...report, spacesDetail: reportView.spacesDetail }, currentUser });
       }
+    } catch {
+      setExportError("No se pudo preparar el PDF. Intenta nuevamente.");
     } finally {
       setExporting(false);
     }
   }
 
-  return <div className="content audit-page">
+  return <div className={`content audit-page ${mode === "reports" ? "reports-page" : ""}`}>
     <section className="audit-hero">
       <div>
-        <p>AUDITORIA MUNICIPAL</p>
-        <h1>Seguimiento de controles</h1>
-        <span>Elegis una cooperativa, revisas el informe y exportas el PDF cuando lo necesites.</span>
+        <p>{mode === "reports" ? "INFORMES MUNICIPALES" : "AUDITORIA MUNICIPAL"}</p>
+        <h1>{mode === "reports" ? "Informes de gestion" : "Seguimiento de controles"}</h1>
+        <span>{mode === "reports" ? "Selecciona el periodo y la cooperativa para revisar o descargar el informe." : "Elegis una cooperativa, revisas el informe y exportas el PDF cuando lo necesites."}</span>
       </div>
       <div className="audit-month-control">
         <button onClick={() => changeMonth(-1)} aria-label="Mes anterior"><ChevronLeft size={16} /></button>
@@ -265,6 +271,7 @@ export function AuditDashboard({ spaces, providers, currentUser, onPhotoDeleted 
         {exporting ? <LoaderCircle className="spin" size={17} /> : <Download size={17} />}{exportLabel}
       </button>
     </section>
+    {exportError && <p className="audit-export-error" role="alert">{exportError}</p>}
 
     <div className="audit-layout focused">
       <section className="audit-panel audit-main-panel">
@@ -345,7 +352,7 @@ export function AuditDashboard({ spaces, providers, currentUser, onPhotoDeleted 
           <h2>Ultima actividad</h2>
           <p>Movimientos recientes del registro de control</p>
         </div>
-        <span>{currentUser.role === "auditor" ? "Perfil auditor" : "Perfil administrador"}</span>
+        <span>{mode === "reports" ? "Consulta general" : currentUser.role === "auditor" ? "Perfil auditor" : "Perfil administrador"}</span>
       </div>
       <div className="audit-activity">
         {audit.activity.map((item) => <div key={item.id}>
@@ -646,233 +653,176 @@ function hasAnyControl(record: ControlRecord) {
   return controlKeys.some((key) => record[key] === "si" || record[key] === "no");
 }
 
-function downloadAuditPdf({ filterTitle, month, period, report, currentUser }: { filterTitle: string; month: string; period: string; report: ProviderRow; currentUser: UserProfile }) {
-  const width = 842;
-  const height = 595;
+async function downloadAuditPdf({ filterTitle, month, period, report, currentUser }: { filterTitle: string; month: string; period: string; report: ProviderRow; currentUser: UserProfile }) {
+  const { doc, logo } = await createBrandedPdf();
+  const width = doc.internal.pageSize.getWidth();
+  const height = doc.internal.pageSize.getHeight();
   const margin = 36;
   const { from, to } = periodRange(month);
   const issuedAt = formatDate(new Date().toISOString());
   const groups = groupSpacesByProvider(report.spacesDetail);
-  const pages: string[] = [];
-  const pageContents: string[][] = [];
-  let pageIndex = -1;
-  let content: string[] = [];
+  let page = 0;
   let y = 0;
 
   function startPage() {
-    pageIndex += 1;
-    content = [];
-    pageContents.push(content);
-    y = height - margin;
-    addPdfRect(content, 0, height - 78, width, 78, "0.02 0.25 0.55");
-    addPdfText(content, "MUNICIPALIDAD DE SAN MIGUEL DE TUCUMAN", margin, height - 22, 8, true, "1 1 1");
-    addPdfText(content, "DIRECCION DE INTELIGENCIA ARTIFICIAL", margin, height - 34, 8, true, "0.86 0.93 1");
-    addPdfText(content, "Informe de auditoria de espacios verdes", margin, height - 54, 16, true, "1 1 1");
-    addPdfText(content, `${period} | ${filterTitle}`, margin, height - 69, 9, false, "0.86 0.93 1");
-    addPdfText(content, `Pagina ${pageIndex + 1}`, width - margin - 48, height - 22, 8, false, "0.86 0.93 1");
-    y = height - 102;
+    if (page > 0) doc.addPage();
+    page += 1;
+    drawPdfHeader(doc, logo, {
+      title: "Informe de auditoria de espacios verdes",
+      subtitle: `${period} | ${filterTitle}`,
+      page,
+      rightLabel: `Emitido ${issuedAt}`,
+    });
+    y = 108;
   }
 
-  function ensureSpace(required: number) {
-    if (y - required < margin) startPage();
+  function drawGroupHeader(providerName: string, count: number, continued = false) {
+    doc.setFillColor(232, 243, 255);
+    doc.roundedRect(margin, y, width - margin * 2, 23, 4, 4, "F");
+    setPdfFont(doc, 9, true, "#063f8c");
+    doc.text(`${providerName}${continued ? " (continuacion)" : ""}`, margin + 10, y + 15);
+    setPdfFont(doc, 7, false, "#52677e");
+    doc.text(`${count} espacios`, width - margin - 10, y + 15, { align: "right" });
+    y += 29;
+    drawAuditTableHeader(doc, y);
+    y += 20;
   }
 
   startPage();
-  addPdfText(content, "Resumen del informe", margin, y, 12, true, "0.06 0.15 0.28");
-  y -= 20;
-  addInfoBox(content, margin, y - 36, 150, "Fecha de exportacion", issuedAt);
-  addInfoBox(content, margin + 158, y - 36, 130, "Desde", from);
-  addInfoBox(content, margin + 296, y - 36, 130, "Hasta", to);
-  addInfoBox(content, margin + 434, y - 36, 170, "Emitido por", currentUser.full_name);
-  addInfoBox(content, margin + 612, y - 36, 158, "Cooperativa", report.title);
-  y -= 56;
-
-  addInfoBox(content, margin, y - 36, 112, "Espacios", report.spaces);
-  addInfoBox(content, margin + 120, y - 36, 112, "Controlados", report.reviewed);
-  addInfoBox(content, margin + 240, y - 36, 112, "Exportados", report.spacesDetail.length);
-  addInfoBox(content, margin + 360, y - 36, 112, "Pendientes", report.pending);
-  addInfoBox(content, margin + 480, y - 36, 112, "Observaciones", report.negative);
-  addInfoBox(content, margin + 600, y - 36, 170, "Superficie", `${formatNumber(report.surface)} m2`);
-  y -= 58;
-
-  addPdfText(content, "Detalle por cooperativa", margin, y, 12, true, "0.06 0.15 0.28");
-  y -= 20;
+  setPdfFont(doc, 11, true);
+  doc.text("Resumen del informe", margin, y);
+  y += 12;
+  drawPdfInfoBox(doc, margin, y, 150, "Fecha de exportacion", issuedAt);
+  drawPdfInfoBox(doc, margin + 158, y, 130, "Desde", from);
+  drawPdfInfoBox(doc, margin + 296, y, 130, "Hasta", to);
+  drawPdfInfoBox(doc, margin + 434, y, 170, "Emitido por", currentUser.full_name);
+  drawPdfInfoBox(doc, margin + 612, y, 158, "Cooperativa", report.title);
+  y += 48;
+  drawPdfInfoBox(doc, margin, y, 112, "Espacios", report.spaces);
+  drawPdfInfoBox(doc, margin + 120, y, 112, "Controlados", report.reviewed);
+  drawPdfInfoBox(doc, margin + 240, y, 112, "Exportados", report.spacesDetail.length);
+  drawPdfInfoBox(doc, margin + 360, y, 112, "Pendientes", report.pending);
+  drawPdfInfoBox(doc, margin + 480, y, 112, "Observaciones", report.negative);
+  drawPdfInfoBox(doc, margin + 600, y, 170, "Superficie", `${formatNumber(report.surface)} m2`);
+  y += 58;
+  setPdfFont(doc, 11, true);
+  doc.text("Detalle por cooperativa", margin, y);
+  y += 15;
 
   if (!groups.length) {
-    addPdfRect(content, margin, y - 40, width - margin * 2, 46, "0.96 0.98 1");
-    addPdfText(content, "No hay registros para el filtro seleccionado.", margin + 12, y - 18, 10, false, "0.37 0.45 0.55");
+    doc.setFillColor(245, 249, 255);
+    doc.roundedRect(margin, y, width - margin * 2, 46, 4, 4, "F");
+    setPdfFont(doc, 9, false, "#65758b");
+    doc.text("No hay registros para el filtro seleccionado.", margin + 12, y + 27);
   }
 
   for (const group of groups) {
-    ensureSpace(76);
-    addPdfRect(content, margin, y - 22, width - margin * 2, 24, "0.91 0.96 1");
-    addPdfText(content, group.providerName, margin + 10, y - 14, 10, true, "0.02 0.25 0.55");
-    addPdfText(content, `${group.spaces.length} espacios`, width - margin - 78, y - 14, 8, false, "0.25 0.34 0.45");
-    y -= 34;
-    drawAuditTableHeader(content, y);
-    y -= 18;
+    if (y + 72 > height - margin) startPage();
+    drawGroupHeader(group.providerName, group.spaces.length);
 
     for (const space of group.spaces) {
-      ensureSpace(34);
-      const rowHeight = 24;
-      addPdfRect(content, margin, y - rowHeight + 4, width - margin * 2, rowHeight, space.hasObservation ? "1 0.96 0.96" : space.isReviewed ? "0.96 1 0.97" : "1 0.98 0.94");
-      addPdfText(content, truncate(space.name, 39), margin + 8, y - 10, 8, true, "0.06 0.15 0.28");
-      addPdfText(content, truncate(space.neighborhood || "Sin barrio", 22), margin + 8, y - 20, 7, false, "0.37 0.45 0.55");
-      addPdfText(content, formatNumber(space.surface), margin + 226, y - 13, 8, false, "0.06 0.15 0.28");
-      addPdfText(content, controlText(space.controls[0]), margin + 282, y - 13, 8, true, controlColor(space.controls[0]));
-      addPdfText(content, formatOptionalDate(space.controlDates[0]), margin + 314, y - 13, 8, false, "0.06 0.15 0.28");
-      addPdfText(content, controlText(space.controls[1]), margin + 392, y - 13, 8, true, controlColor(space.controls[1]));
-      addPdfText(content, formatOptionalDate(space.controlDates[1]), margin + 424, y - 13, 8, false, "0.06 0.15 0.28");
-      addPdfText(content, controlText(space.controls[2]), margin + 502, y - 13, 8, true, controlColor(space.controls[2]));
-      addPdfText(content, formatOptionalDate(space.controlDates[2]), margin + 534, y - 13, 8, false, "0.06 0.15 0.28");
-      addPdfText(content, String(space.photos), margin + 742, y - 13, 8, false, "0.06 0.15 0.28");
-      y -= rowHeight + 4;
+      const rowHeight = 28;
+      if (y + rowHeight > height - margin) {
+        startPage();
+        drawGroupHeader(group.providerName, group.spaces.length, true);
+      }
+      doc.setFillColor(space.hasObservation ? "#fff3f3" : space.isReviewed ? "#f2fff6" : "#fff9ed");
+      doc.rect(margin, y, width - margin * 2, rowHeight, "F");
+      setPdfFont(doc, 7.5, true);
+      doc.text(fitPdfText(doc, space.name, 204), margin + 8, y + 11);
+      setPdfFont(doc, 6.2, false, "#65758b");
+      doc.text(fitPdfText(doc, space.neighborhood || "Sin barrio", 204), margin + 8, y + 22);
+      setPdfFont(doc, 7, false);
+      doc.text(formatNumber(space.surface), margin + 226, y + 17);
+      setPdfFont(doc, 7, true, controlColor(space.controls[0]));
+      doc.text(controlText(space.controls[0]), margin + 282, y + 17);
+      setPdfFont(doc, 6.5);
+      doc.text(formatOptionalDate(space.controlDates[0]), margin + 314, y + 17);
+      setPdfFont(doc, 7, true, controlColor(space.controls[1]));
+      doc.text(controlText(space.controls[1]), margin + 392, y + 17);
+      setPdfFont(doc, 6.5);
+      doc.text(formatOptionalDate(space.controlDates[1]), margin + 424, y + 17);
+      setPdfFont(doc, 7, true, controlColor(space.controls[2]));
+      doc.text(controlText(space.controls[2]), margin + 502, y + 17);
+      setPdfFont(doc, 6.5);
+      doc.text(formatOptionalDate(space.controlDates[2]), margin + 534, y + 17);
+      doc.text(String(space.photos), margin + 742, y + 17);
+      y += rowHeight + 3;
     }
-    y -= 8;
+    y += 7;
   }
 
-  const objects: string[] = [];
-  for (let index = 0; index < pageContents.length; index += 1) {
-    const stream = pageContents[index].join("\n");
-    const pageObject = 5 + index * 2;
-    const contentObject = pageObject + 1;
-    pages.push(`${pageObject} 0 R`);
-    objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${width} ${height}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${contentObject} 0 R >>`);
-    objects.push(`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`);
-  }
-
-  const allObjects = [
-    `<< /Type /Catalog /Pages 2 0 R >>`,
-    `<< /Type /Pages /Kids [${pages.join(" ")}] /Count ${pages.length} >>`,
-    `<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>`,
-    `<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>`,
-    ...objects,
-  ];
-  let pdf = "%PDF-1.4\n";
-  const offsets = [0];
-  allObjects.forEach((object, index) => {
-    offsets.push(pdf.length);
-    pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
-  });
-  const xref = pdf.length;
-  pdf += `xref\n0 ${allObjects.length + 1}\n0000000000 65535 f \n`;
-  offsets.slice(1).forEach((offset) => { pdf += `${String(offset).padStart(10, "0")} 00000 n \n`; });
-  pdf += `trailer\n<< /Size ${allObjects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
-
-  const blob = new Blob([pdf], { type: "application/pdf" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `informe-auditoria-${slug(report.title)}-${month}.pdf`;
-  link.click();
-  URL.revokeObjectURL(url);
+  downloadPdfFile(doc, `informe-auditoria-${slug(report.title)}-${month}.pdf`);
 }
 
-function downloadObservationsPdf({ month, period, title, observations, currentUser }: { month: string; period: string; title: string; observations: AuditObservationItem[]; currentUser: UserProfile }) {
-  const width = 842;
-  const height = 595;
+async function downloadObservationsPdf({ month, period, title, observations, currentUser }: { month: string; period: string; title: string; observations: AuditObservationItem[]; currentUser: UserProfile }) {
+  const { doc, logo } = await createBrandedPdf();
+  const width = doc.internal.pageSize.getWidth();
+  const height = doc.internal.pageSize.getHeight();
   const margin = 36;
   const { from, to } = periodRange(month);
   const issuedAt = formatDate(new Date().toISOString());
-  const pages: string[] = [];
-  const pageContents: string[][] = [];
-  let pageIndex = -1;
-  let content: string[] = [];
+  let page = 0;
   let y = 0;
 
   function startPage() {
-    pageIndex += 1;
-    content = [];
-    pageContents.push(content);
-    y = height - margin;
-    addPdfRect(content, 0, height - 78, width, 78, "0.02 0.25 0.55");
-    addPdfText(content, "MUNICIPALIDAD DE SAN MIGUEL DE TUCUMAN", margin, height - 22, 8, true, "1 1 1");
-    addPdfText(content, "DIRECCION DE INTELIGENCIA ARTIFICIAL", margin, height - 34, 8, true, "0.86 0.93 1");
-    addPdfText(content, "Informe de observaciones de supervision", margin, height - 54, 16, true, "1 1 1");
-    addPdfText(content, `${period} | ${title}`, margin, height - 69, 9, false, "0.86 0.93 1");
-    addPdfText(content, `Pagina ${pageIndex + 1}`, width - margin - 48, height - 22, 8, false, "0.86 0.93 1");
-    y = height - 102;
-  }
-
-  function ensureSpace(required: number) {
-    if (y - required < margin) startPage();
+    if (page > 0) doc.addPage();
+    page += 1;
+    drawPdfHeader(doc, logo, {
+      title: "Informe de observaciones de supervision",
+      subtitle: `${period} | ${title}`,
+      page,
+      rightLabel: `Emitido ${issuedAt}`,
+    });
+    y = 108;
   }
 
   startPage();
-  addPdfText(content, "Resumen de observaciones", margin, y, 12, true, "0.06 0.15 0.28");
-  y -= 20;
-  addInfoBox(content, margin, y - 36, 150, "Fecha de exportacion", issuedAt);
-  addInfoBox(content, margin + 158, y - 36, 130, "Desde", from);
-  addInfoBox(content, margin + 296, y - 36, 130, "Hasta", to);
-  addInfoBox(content, margin + 434, y - 36, 170, "Emitido por", currentUser.full_name);
-  addInfoBox(content, margin + 612, y - 36, 158, "Seleccion", title);
-  y -= 56;
-  addInfoBox(content, margin, y - 36, 150, "Observaciones", observations.length);
-  addInfoBox(content, margin + 158, y - 36, 220, "Origen", "Notas cargadas por supervision");
-  y -= 58;
+  setPdfFont(doc, 11, true);
+  doc.text("Resumen de observaciones", margin, y);
+  y += 12;
+  drawPdfInfoBox(doc, margin, y, 150, "Fecha de exportacion", issuedAt);
+  drawPdfInfoBox(doc, margin + 158, y, 130, "Desde", from);
+  drawPdfInfoBox(doc, margin + 296, y, 130, "Hasta", to);
+  drawPdfInfoBox(doc, margin + 434, y, 170, "Emitido por", currentUser.full_name);
+  drawPdfInfoBox(doc, margin + 612, y, 158, "Seleccion", title);
+  y += 48;
+  drawPdfInfoBox(doc, margin, y, 150, "Observaciones", observations.length);
+  drawPdfInfoBox(doc, margin + 158, y, 240, "Origen", "Notas cargadas por supervision");
+  y += 58;
 
   if (!observations.length) {
-    addPdfRect(content, margin, y - 40, width - margin * 2, 46, "0.96 0.98 1");
-    addPdfText(content, "No hay observaciones para la seleccion actual.", margin + 12, y - 18, 10, false, "0.37 0.45 0.55");
+    doc.setFillColor(245, 249, 255);
+    doc.roundedRect(margin, y, width - margin * 2, 46, 4, 4, "F");
+    setPdfFont(doc, 9, false, "#65758b");
+    doc.text("No hay observaciones para la seleccion actual.", margin + 12, y + 27);
   }
 
   for (const observation of observations) {
-    const lines = wrapPdfText(observation.observation, 108).slice(0, 4);
+    const lines = doc.splitTextToSize(observation.observation, width - margin * 2 - 20).slice(0, 4) as string[];
     const rowHeight = 48 + lines.length * 10;
+    if (y + rowHeight > height - margin) startPage();
     const spaceName = observation.space?.name ?? "Espacio sin identificar";
     const providerName = observation.space?.provider?.name ?? "Sin cooperativa";
     const reference = observation.space?.neighborhood || observation.space?.address || "Sin referencia";
-    ensureSpace(rowHeight + 10);
-    addPdfRect(content, margin, y - rowHeight + 4, width - margin * 2, rowHeight, "0.96 0.98 1");
-    addPdfText(content, truncate(spaceName, 54), margin + 10, y - 12, 10, true, "0.06 0.15 0.28");
-    addPdfText(content, truncate(`${providerName} | ${reference}`, 82), margin + 10, y - 25, 8, false, "0.37 0.45 0.55");
-    addPdfText(content, formatDate(observation.created_at), width - margin - 96, y - 12, 8, false, "0.25 0.34 0.45");
-    lines.forEach((line, index) => {
-      addPdfText(content, line, margin + 10, y - 42 - index * 10, 8, false, "0.15 0.22 0.32");
-    });
-    y -= rowHeight + 8;
+    doc.setFillColor(245, 249, 255);
+    doc.roundedRect(margin, y, width - margin * 2, rowHeight, 5, 5, "F");
+    setPdfFont(doc, 9, true);
+    doc.text(fitPdfText(doc, spaceName, width - margin * 2 - 150), margin + 10, y + 16);
+    setPdfFont(doc, 7, false, "#65758b");
+    doc.text(fitPdfText(doc, `${providerName} | ${reference}`, width - margin * 2 - 150), margin + 10, y + 30);
+    doc.text(formatDate(observation.created_at), width - margin - 10, y + 16, { align: "right" });
+    setPdfFont(doc, 7.5, false, "#26384f");
+    lines.forEach((line, index) => doc.text(line, margin + 10, y + 47 + index * 10));
+    y += rowHeight + 8;
   }
 
-  const objects: string[] = [];
-  for (let index = 0; index < pageContents.length; index += 1) {
-    const stream = pageContents[index].join("\n");
-    const pageObject = 5 + index * 2;
-    const contentObject = pageObject + 1;
-    pages.push(`${pageObject} 0 R`);
-    objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${width} ${height}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${contentObject} 0 R >>`);
-    objects.push(`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`);
-  }
-
-  const allObjects = [
-    `<< /Type /Catalog /Pages 2 0 R >>`,
-    `<< /Type /Pages /Kids [${pages.join(" ")}] /Count ${pages.length} >>`,
-    `<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>`,
-    `<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>`,
-    ...objects,
-  ];
-  let pdf = "%PDF-1.4\n";
-  const offsets = [0];
-  allObjects.forEach((object, index) => {
-    offsets.push(pdf.length);
-    pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
-  });
-  const xref = pdf.length;
-  pdf += `xref\n0 ${allObjects.length + 1}\n0000000000 65535 f \n`;
-  offsets.slice(1).forEach((offset) => { pdf += `${String(offset).padStart(10, "0")} 00000 n \n`; });
-  pdf += `trailer\n<< /Size ${allObjects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
-
-  const blob = new Blob([pdf], { type: "application/pdf" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `observaciones-${slug(title)}-${month}.pdf`;
-  link.click();
-  URL.revokeObjectURL(url);
+  downloadPdfFile(doc, `observaciones-${slug(title)}-${month}.pdf`);
 }
 
 async function downloadEvidenceBookPdf({ month, period, report, currentUser }: { month: string; period: string; report: ProviderRow; currentUser: UserProfile }) {
-  const width = 842;
-  const height = 595;
+  const { doc, logo } = await createBrandedPdf();
+  const width = doc.internal.pageSize.getWidth();
   const margin = 36;
   const issuedAt = formatDate(new Date().toISOString());
   const photos = report.spacesDetail.flatMap((space) => space.photoItems.map((photo) => ({
@@ -882,116 +832,83 @@ async function downloadEvidenceBookPdf({ month, period, report, currentUser }: {
     neighborhood: space.neighborhood || "Sin barrio",
   })));
   const loadedPhotos = (await Promise.all(photos.map(loadPhotoForPdf))).filter((photo): photo is PdfPhoto => Boolean(photo));
-  const pageGroups = chunk(loadedPhotos, 2);
-  const pageContents: string[][] = [];
-  const pages: string[] = [];
-
+  const pageGroups = chunk(loadedPhotos, 4);
   if (!pageGroups.length) pageGroups.push([]);
 
-  for (const group of pageGroups) {
-    const content: string[] = [];
-    pageContents.push(content);
-    addPdfRect(content, 0, height - 78, width, 78, "0.02 0.25 0.55");
-    addPdfText(content, "MUNICIPALIDAD DE SAN MIGUEL DE TUCUMAN", margin, height - 22, 8, true, "1 1 1");
-    addPdfText(content, "DIRECCION DE INTELIGENCIA ARTIFICIAL", margin, height - 34, 8, true, "0.86 0.93 1");
-    addPdfText(content, "Book fotografico de evidencias", margin, height - 54, 16, true, "1 1 1");
-    addPdfText(content, `${period} | ${report.title}`, margin, height - 69, 9, false, "0.86 0.93 1");
-    addPdfText(content, `Exportado: ${issuedAt} | ${currentUser.full_name}`, width - margin - 230, height - 22, 8, false, "0.86 0.93 1");
+  pageGroups.forEach((group, pageIndex) => {
+    if (pageIndex > 0) doc.addPage();
+    drawPdfHeader(doc, logo, {
+      title: "Book fotografico de evidencias",
+      subtitle: `${period} | ${report.title}`,
+      page: pageIndex + 1,
+      rightLabel: `${issuedAt} | ${currentUser.full_name}`,
+    });
 
     if (!group.length) {
-      addPdfRect(content, margin, height - 168, width - margin * 2, 62, "0.96 0.98 1");
-      addPdfText(content, "No hay fotos cargadas para esta seleccion.", margin + 16, height - 136, 12, true, "0.06 0.15 0.28");
-      continue;
+      doc.setFillColor(245, 249, 255);
+      doc.roundedRect(margin, 112, width - margin * 2, 62, 5, 5, "F");
+      setPdfFont(doc, 11, true);
+      doc.text("No hay fotos cargadas para esta seleccion.", margin + 16, 147);
+      return;
     }
 
     group.forEach((photo, index) => {
-      const x = index === 0 ? margin : width / 2 + 10;
-      const y = 92;
-      const boxWidth = width / 2 - margin - 18;
-      const boxHeight = 340;
-      const labelY = y + boxHeight + 26;
-      const fit = fitImage(photo.width, photo.height, boxWidth, boxHeight);
-      const imageName = `Im${pageContents.length}_${index + 1}`;
-      content.push(`q ${fit.width.toFixed(2)} 0 0 ${fit.height.toFixed(2)} ${(x + fit.x).toFixed(2)} ${(y + fit.y).toFixed(2)} cm /${imageName} Do Q`);
-      addPdfRect(content, x, y - 42, boxWidth, 36, "0.96 0.98 1");
-      addPdfText(content, truncate(photo.spaceName, 40), x + 8, labelY, 10, true, "0.06 0.15 0.28");
-      addPdfText(content, truncate(photo.providerName, 42), x + 8, labelY - 14, 8, false, "0.37 0.45 0.55");
-      addPdfText(content, `${photoTypeLabel(photo.type).toUpperCase()} | ${formatDate(photo.createdAt)} | ${photo.neighborhood}`, x + 8, y - 20, 8, false, "0.25 0.34 0.45");
+      const height = doc.internal.pageSize.getHeight();
+      const columnGap = 14;
+      const rowGap = 14;
+      const contentTop = 100;
+      const contentBottom = 32;
+      const cardWidth = (width - margin * 2 - columnGap) / 2;
+      const cardHeight = (height - contentTop - contentBottom - rowGap) / 2;
+      const column = index % 2;
+      const row = Math.floor(index / 2);
+      const x = margin + column * (cardWidth + columnGap);
+      const y = contentTop + row * (cardHeight + rowGap);
+      const metadataHeight = 54;
+      const imagePadding = 6;
+      const imageBoxWidth = cardWidth - imagePadding * 2;
+      const imageBoxHeight = cardHeight - metadataHeight - imagePadding * 2;
+      const fit = fitImage(photo.width, photo.height, imageBoxWidth, imageBoxHeight);
+
+      doc.setFillColor(255, 255, 255);
+      doc.setDrawColor(215, 229, 244);
+      doc.roundedRect(x, y, cardWidth, cardHeight, 7, 7, "FD");
+      doc.setFillColor(241, 246, 252);
+      doc.roundedRect(x + imagePadding, y + imagePadding, imageBoxWidth, imageBoxHeight, 4, 4, "F");
+      doc.addImage(photo.dataUrl, "JPEG", x + imagePadding + fit.x, y + imagePadding + fit.y, fit.width, fit.height, undefined, "FAST");
+
+      const metadataY = y + cardHeight - metadataHeight;
+      doc.setDrawColor(231, 239, 248);
+      doc.line(x, metadataY, x + cardWidth, metadataY);
+      setPdfFont(doc, 8.5, true);
+      doc.text(fitPdfText(doc, photo.spaceName, cardWidth - 16), x + 8, metadataY + 16);
+      setPdfFont(doc, 6.7, false, "#65758b");
+      doc.text(fitPdfText(doc, photo.providerName, cardWidth - 16), x + 8, metadataY + 30);
+      setPdfFont(doc, 6.7, true, "#0166ff");
+      doc.text(fitPdfText(doc, `${photoTypeLabel(photo.type).toUpperCase()} | ${formatDate(photo.createdAt)} | ${photo.neighborhood}`, cardWidth - 16), x + 8, metadataY + 44);
     });
-  }
-
-  const allObjects = [
-    `<< /Type /Catalog /Pages 2 0 R >>`,
-    "",
-    `<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>`,
-    `<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>`,
-  ];
-
-  for (let index = 0; index < pageContents.length; index += 1) {
-    const group = pageGroups[index];
-    const pageObject = allObjects.length + 1;
-    const contentObject = pageObject + 1;
-    const imageObjectNumbers = group.map((_, imageIndex) => contentObject + 1 + imageIndex);
-    const xObjects = imageObjectNumbers.map((objectNumber, imageIndex) => `/Im${index + 1}_${imageIndex + 1} ${objectNumber} 0 R`).join(" ");
-    const stream = pageContents[index].join("\n");
-    pages.push(`${pageObject} 0 R`);
-    allObjects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${width} ${height}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> /XObject << ${xObjects} >> >> /Contents ${contentObject} 0 R >>`);
-    allObjects.push(`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`);
-    for (const photo of group) {
-      allObjects.push(`<< /Type /XObject /Subtype /Image /Width ${photo.width} /Height ${photo.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter [/ASCIIHexDecode /DCTDecode] /Length ${photo.hex.length + 1} >>\nstream\n${photo.hex}>\nendstream`);
-    }
-  }
-  allObjects[1] = `<< /Type /Pages /Kids [${pages.join(" ")}] /Count ${pages.length} >>`;
-
-  let pdf = "%PDF-1.4\n";
-  const offsets = [0];
-  allObjects.forEach((object, index) => {
-    offsets.push(pdf.length);
-    pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
   });
-  const xref = pdf.length;
-  pdf += `xref\n0 ${allObjects.length + 1}\n0000000000 65535 f \n`;
-  offsets.slice(1).forEach((offset) => { pdf += `${String(offset).padStart(10, "0")} 00000 n \n`; });
-  pdf += `trailer\n<< /Size ${allObjects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
 
-  const blob = new Blob([pdf], { type: "application/pdf" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `book-evidencias-${slug(report.title)}-${month}.pdf`;
-  link.click();
-  URL.revokeObjectURL(url);
+  downloadPdfFile(doc, `book-evidencias-${slug(report.title)}-${month}.pdf`);
 }
 
-function addInfoBox(content: string[], x: number, y: number, width: number, label: string, value: string | number) {
-  addPdfRect(content, x, y, width, 38, "0.96 0.98 1");
-  addPdfText(content, label, x + 8, y + 23, 7, false, "0.37 0.45 0.55");
-  addPdfText(content, truncate(String(value), Math.max(10, Math.floor(width / 7))), x + 8, y + 10, 9, true, "0.06 0.15 0.28");
-}
-
-function drawAuditTableHeader(content: string[], y: number) {
-  addPdfRect(content, 36, y - 16, 770, 18, "0.08 0.18 0.32");
-  addPdfText(content, "Espacio verde", 44, y - 10, 7, true, "1 1 1");
-  addPdfText(content, "m2", 262, y - 10, 7, true, "1 1 1");
-  addPdfText(content, "C1", 318, y - 10, 7, true, "1 1 1");
-  addPdfText(content, "Fecha 1", 350, y - 10, 7, true, "1 1 1");
-  addPdfText(content, "C2", 428, y - 10, 7, true, "1 1 1");
-  addPdfText(content, "Fecha 2", 460, y - 10, 7, true, "1 1 1");
-  addPdfText(content, "C3", 538, y - 10, 7, true, "1 1 1");
-  addPdfText(content, "Fecha 3", 570, y - 10, 7, true, "1 1 1");
-  addPdfText(content, "Fotos", 778, y - 10, 7, true, "1 1 1");
-}
-
-function addPdfText(content: string[], text: string, x: number, y: number, size: number, bold = false, color = "0 0 0") {
-  content.push(`${color} rg BT /${bold ? "F2" : "F1"} ${size} Tf ${x.toFixed(2)} ${y.toFixed(2)} Td (${pdfText(text)}) Tj ET`);
-}
-
-function addPdfRect(content: string[], x: number, y: number, width: number, height: number, color: string) {
-  content.push(`${color} rg ${x.toFixed(2)} ${y.toFixed(2)} ${width.toFixed(2)} ${height.toFixed(2)} re f`);
+function drawAuditTableHeader(doc: jsPDF, y: number) {
+  doc.setFillColor(18, 46, 82);
+  doc.rect(36, y, 770, 18, "F");
+  setPdfFont(doc, 6.5, true, "#ffffff");
+  doc.text("Espacio verde", 44, y + 12);
+  doc.text("m2", 262, y + 12);
+  doc.text("C1", 318, y + 12);
+  doc.text("Fecha 1", 350, y + 12);
+  doc.text("C2", 428, y + 12);
+  doc.text("Fecha 2", 460, y + 12);
+  doc.text("C3", 538, y + 12);
+  doc.text("Fecha 3", 570, y + 12);
+  doc.text("Fotos", 778, y + 12);
 }
 
 type PdfPhoto = {
-  hex: string;
+  dataUrl: string;
   width: number;
   height: number;
   url: string;
@@ -1002,7 +919,7 @@ type PdfPhoto = {
   neighborhood: string;
 };
 
-async function loadPhotoForPdf(photo: Omit<PdfPhoto, "hex" | "width" | "height">): Promise<PdfPhoto | null> {
+async function loadPhotoForPdf(photo: Omit<PdfPhoto, "dataUrl" | "width" | "height">): Promise<PdfPhoto | null> {
   try {
     const response = await fetch(photo.url);
     const blob = await response.blob();
@@ -1020,7 +937,7 @@ async function loadPhotoForPdf(photo: Omit<PdfPhoto, "hex" | "width" | "height">
     context.drawImage(image, 0, 0, canvas.width, canvas.height);
     URL.revokeObjectURL(imageUrl);
     const dataUrl = canvas.toDataURL("image/jpeg", 0.82);
-    return { ...photo, width: canvas.width, height: canvas.height, hex: dataUrlToHex(dataUrl) };
+    return { ...photo, width: canvas.width, height: canvas.height, dataUrl };
   } catch {
     return null;
   }
@@ -1033,15 +950,6 @@ function loadImage(src: string) {
     image.onerror = reject;
     image.src = src;
   });
-}
-
-function dataUrlToHex(dataUrl: string) {
-  const binary = atob(dataUrl.split(",")[1] ?? "");
-  let hex = "";
-  for (let index = 0; index < binary.length; index += 1) {
-    hex += binary.charCodeAt(index).toString(16).padStart(2, "0");
-  }
-  return hex;
 }
 
 function fitImage(imageWidth: number, imageHeight: number, boxWidth: number, boxHeight: number) {
@@ -1058,7 +966,7 @@ function chunk<T>(items: T[], size: number) {
 }
 
 function pdfText(value: string | number | null | undefined) {
-  return String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[()\\]/g, "\\$&");
+  return String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
 
 function controlText(value: ControlValue) {
@@ -1068,9 +976,9 @@ function controlText(value: ControlValue) {
 }
 
 function controlColor(value: ControlValue) {
-  if (value === "si") return "0.09 0.50 0.24";
-  if (value === "no") return "0.72 0.11 0.11";
-  return "0.45 0.52 0.60";
+  if (value === "si") return "#17803d";
+  if (value === "no") return "#b91c1c";
+  return "#73849a";
 }
 
 function formatOptionalDate(value: string | null) {
@@ -1092,27 +1000,6 @@ function periodRange(month: string) {
   end.setMonth(end.getMonth() + 1);
   end.setDate(0);
   return { from: formatDate(start.toISOString()), to: formatDate(end.toISOString()) };
-}
-
-function truncate(value: string, maxLength: number) {
-  return value.length > maxLength ? `${value.slice(0, maxLength - 1)}.` : value;
-}
-
-function wrapPdfText(value: string, maxLength: number) {
-  const words = value.replace(/\s+/g, " ").trim().split(" ");
-  const lines: string[] = [];
-  let line = "";
-  for (const word of words) {
-    const nextLine = line ? `${line} ${word}` : word;
-    if (nextLine.length > maxLength && line) {
-      lines.push(line);
-      line = word;
-    } else {
-      line = nextLine;
-    }
-  }
-  if (line) lines.push(line);
-  return lines.length ? lines : ["Sin detalle."];
 }
 
 function slug(value: string) {
