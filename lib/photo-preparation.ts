@@ -11,6 +11,7 @@ export type PreparedPhoto = {
   fileName: string;
   originalBytes: number;
   outputBytes: number;
+  compressed: boolean;
 };
 
 export async function runWithConcurrency<T>(items: T[], limit: number, worker: (item: T) => Promise<void>) {
@@ -34,81 +35,113 @@ export async function preparePhoto(file: File): Promise<PreparedPhoto> {
     throw new Error(`${file.name} supera el limite de 30 MB.`);
   }
 
-  const decoded = await decodeImage(file);
-  const width = decoded.image.width;
-  const height = decoded.image.height;
-  const longestEdge = Math.max(width, height);
-  const canPassThrough = file.size <= PASSTHROUGH_BYTES
-    && longestEdge <= MAX_IMAGE_EDGE
-    && /image\/(jpeg|webp)/i.test(file.type);
+  // Comprimir es una optimizacion: si este dispositivo no puede decodificar o
+  // recomprimir la imagen, se sube el archivo original tal cual antes que
+  // perder la evidencia.
+  let decoded: Awaited<ReturnType<typeof decodeImage>>;
+  try {
+    decoded = await decodeImage(file);
+  } catch {
+    return passthrough(file);
+  }
 
-  if (canPassThrough) {
-    decoded.cleanup();
+  try {
+    const { width, height } = decoded;
+    const longestEdge = Math.max(width, height);
+    const canPassThrough = file.size <= PASSTHROUGH_BYTES
+      && longestEdge <= MAX_IMAGE_EDGE
+      && /image\/(jpeg|webp)/i.test(file.type);
+
+    if (canPassThrough || !width || !height) {
+      return passthrough(file);
+    }
+
+    const scale = Math.min(1, MAX_IMAGE_EDGE / longestEdge);
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(width * scale));
+    canvas.height = Math.max(1, Math.round(height * scale));
+    const context = canvas.getContext("2d");
+    if (!context) return passthrough(file);
+
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(decoded.image, 0, 0, canvas.width, canvas.height);
+
+    const blob = await canvasToBlob(canvas, "image/jpeg", JPEG_QUALITY);
+    // Si la "compresion" agranda el archivo, mejor el original.
+    if (blob.size >= file.size && /image\/(jpeg|webp)/i.test(file.type)) return passthrough(file);
     return {
-      blob: file,
-      contentType: file.type,
-      fileName: safePhotoName(file.name, file.type),
+      blob,
+      contentType: "image/jpeg",
+      fileName: safePhotoName(file.name, "image/jpeg"),
       originalBytes: file.size,
-      outputBytes: file.size,
+      outputBytes: blob.size,
+      compressed: true,
     };
-  }
-
-  const scale = Math.min(1, MAX_IMAGE_EDGE / longestEdge);
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.max(1, Math.round(width * scale));
-  canvas.height = Math.max(1, Math.round(height * scale));
-  const context = canvas.getContext("2d");
-
-  if (!context) {
+  } catch {
+    return passthrough(file);
+  } finally {
     decoded.cleanup();
-    throw new Error(`No se pudo procesar ${file.name}.`);
   }
+}
 
-  context.fillStyle = "#ffffff";
-  context.fillRect(0, 0, canvas.width, canvas.height);
-  context.drawImage(decoded.image, 0, 0, canvas.width, canvas.height);
-  decoded.cleanup();
-
-  const blob = await canvasToBlob(canvas, "image/jpeg", JPEG_QUALITY);
+function passthrough(file: File): PreparedPhoto {
+  const contentType = file.type || "image/jpeg";
   return {
-    blob,
-    contentType: "image/jpeg",
-    fileName: safePhotoName(file.name, "image/jpeg"),
+    blob: file,
+    contentType,
+    fileName: safePhotoName(file.name, contentType),
     originalBytes: file.size,
-    outputBytes: blob.size,
+    outputBytes: file.size,
+    compressed: false,
   };
 }
 
 function safePhotoName(name: string, contentType: string) {
   const base = name.replace(/\.[^.]+$/, "").replace(/[^a-zA-Z0-9_-]/g, "-").replace(/-+/g, "-") || "evidencia";
-  const extension = contentType === "image/webp" ? "webp" : "jpg";
-  return `${base}.${extension}`;
+  const extensions: Record<string, string> = { "image/jpeg": "jpg", "image/webp": "webp", "image/png": "png", "image/heic": "heic", "image/heif": "heif", "image/gif": "gif" };
+  const fallback = name.match(/\.([a-zA-Z0-9]+)$/)?.[1]?.toLowerCase() ?? "jpg";
+  return `${base}.${extensions[contentType.toLowerCase()] ?? fallback}`;
 }
 
 async function decodeImage(file: File): Promise<{
-  image: CanvasImageSource & { width: number; height: number };
+  image: CanvasImageSource;
+  width: number;
+  height: number;
   cleanup: () => void;
 }> {
   if ("createImageBitmap" in window) {
     try {
       const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
-      return { image: bitmap, cleanup: () => bitmap.close() };
+      return { image: bitmap, width: bitmap.width, height: bitmap.height, cleanup: () => bitmap.close() };
     } catch {
-      // Some mobile image formats are only decoded through an HTMLImageElement.
+      // Algunos navegadores fallan con las opciones o con ciertos formatos:
+      // probar sin opciones y despues con <img>.
+    }
+    try {
+      const bitmap = await createImageBitmap(file);
+      return { image: bitmap, width: bitmap.width, height: bitmap.height, cleanup: () => bitmap.close() };
+    } catch {
+      // Continuar con HTMLImageElement.
     }
   }
 
   const objectUrl = URL.createObjectURL(file);
   const image = new Image();
-  image.decoding = "async";
-  image.src = objectUrl;
 
   try {
-    await image.decode();
-    return { image, cleanup: () => URL.revokeObjectURL(objectUrl) };
-  } catch {
+    // El evento load es mas confiable que image.decode(), que en Android
+    // rechaza fotos validas en algunos dispositivos.
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error(`El formato de ${file.name} no se puede procesar en este dispositivo.`));
+      image.src = objectUrl;
+    });
+    if (!image.naturalWidth || !image.naturalHeight) throw new Error(`El formato de ${file.name} no se puede procesar en este dispositivo.`);
+    return { image, width: image.naturalWidth, height: image.naturalHeight, cleanup: () => URL.revokeObjectURL(objectUrl) };
+  } catch (error) {
     URL.revokeObjectURL(objectUrl);
-    throw new Error(`El formato de ${file.name} no se puede procesar en este dispositivo.`);
+    throw error;
   }
 }
 
