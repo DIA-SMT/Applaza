@@ -22,7 +22,7 @@ export function persistQueue(queue: PendingOp[]) {
 
 export function isNetworkError(message: string) {
   if (typeof navigator !== "undefined" && !navigator.onLine) return true;
-  return /fetch|network|conexión|load failed|timeout/i.test(message);
+  return /fetch|network|conexi(?:o|ó)n|load failed|timeout|timed out|inestable|offline|aborted|\b(?:408|429|5\d\d)\b/i.test(message);
 }
 
 export async function runPendingOp(supabase: SupabaseClient, op: PendingOp): Promise<{ ok: boolean; retry: boolean; message?: string }> {

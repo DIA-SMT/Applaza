@@ -1,5 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { withTimeout } from "./async-timeout";
 import { isNetworkError } from "./offline-queue";
+import { canUseResumableUploads, uploadPhotoResumable } from "./resumable-photo-upload";
 
 export type PhotoOutboxEntry = {
   id: string;
@@ -58,28 +60,59 @@ export async function flushPhotoOutbox(client: SupabaseClient): Promise<{ remain
   flushing = true;
   try {
     const entries = await listPhotoOutbox();
+    const { data: { session } } = entries.length ? await client.auth.getSession() : { data: { session: null } };
     for (const entry of entries) {
-      if (entry.taskSeed) {
-        const { error } = await client.from("maintenance_tasks").insert(entry.taskSeed);
-        if (error && !/duplicate key|already exists/i.test(error.message)) {
-          if (isNetworkError(error.message)) break;
-          rejected.push(`${entry.label}: ${error.message}`); await removeFromOutbox(entry.id); notifyChanged(); continue;
+      try {
+        if (entry.taskSeed) {
+          const { error } = await withTimeout(
+            client.from("maintenance_tasks").insert(entry.taskSeed),
+            20_000,
+            "La conexión está inestable. No se pudo sincronizar el mantenimiento.",
+          );
+          if (error && !/duplicate key|already exists/i.test(error.message)) throw new Error(error.message);
         }
+
+        await uploadQueuedPhoto(client, entry, session?.access_token);
+
+        const { error: rowError } = await withTimeout(
+          client.from("maintenance_photos").insert(entry.row),
+          20_000,
+          "La conexión está inestable. La evidencia seguirá pendiente.",
+        );
+        if (rowError && !/duplicate key|already exists/i.test(rowError.message)) throw new Error(rowError.message);
+
+        await removeFromOutbox(entry.id);
+        notifyChanged();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "No se pudo sincronizar la evidencia.";
+        if (isNetworkError(message)) break;
+        rejected.push(`${entry.label}: ${message}`);
+        await removeFromOutbox(entry.id);
+        notifyChanged();
       }
-      const upload = await client.storage.from("maintenance-photos").upload(entry.path, entry.blob, { contentType: entry.contentType, upsert: false });
-      if (upload.error && !/exists|duplicate/i.test(upload.error.message)) {
-        if (isNetworkError(upload.error.message)) break;
-        rejected.push(`${entry.label}: ${upload.error.message}`); await removeFromOutbox(entry.id); notifyChanged(); continue;
-      }
-      const { error: rowError } = await client.from("maintenance_photos").insert(entry.row);
-      if (rowError && !/duplicate key|already exists/i.test(rowError.message)) {
-        if (isNetworkError(rowError.message)) break;
-        rejected.push(`${entry.label}: ${rowError.message}`); await removeFromOutbox(entry.id); notifyChanged(); continue;
-      }
-      await removeFromOutbox(entry.id); notifyChanged();
     }
   } finally {
     flushing = false;
   }
   return { remaining: await countPhotoOutbox(), rejected };
+}
+
+async function uploadQueuedPhoto(client: SupabaseClient, entry: PhotoOutboxEntry, accessToken?: string) {
+  if (accessToken && canUseResumableUploads()) {
+    try {
+      await uploadPhotoResumable({ blob: entry.blob, path: entry.path, contentType: entry.contentType, accessToken });
+      return;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "No se pudo reanudar la carga.";
+      if (/exists|duplicate|already exists|409/i.test(message)) return;
+      throw error;
+    }
+  }
+
+  const upload = await withTimeout(
+    client.storage.from("maintenance-photos").upload(entry.path, entry.blob, { contentType: entry.contentType, upsert: false }),
+    30_000,
+    "La conexión está lenta o inestable. La evidencia seguirá pendiente.",
+  );
+  if (upload.error && !/exists|duplicate|already exists/i.test(upload.error.message)) throw new Error(upload.error.message);
 }

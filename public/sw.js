@@ -7,7 +7,7 @@
      abrir la app sin conexion con los ultimos datos vistos.
    - Todo lo demas (auth, escrituras) va siempre a la red. */
 
-const VERSION = "applaza-sw-v1";
+const VERSION = "applaza-sw-v2";
 const CACHES = {
   assets: `${VERSION}-assets`,
   pages: `${VERSION}-pages`,

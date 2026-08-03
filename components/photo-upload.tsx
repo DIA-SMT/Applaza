@@ -3,13 +3,37 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Camera, Check, CloudOff, ImagePlus, LoaderCircle, MapPin, TriangleAlert, Upload, X } from "lucide-react";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
+import { withTimeout } from "@/lib/async-timeout";
 import { isNetworkError } from "@/lib/offline-queue";
 import { addPhotoToOutbox, countPhotoOutbox, flushPhotoOutbox, onPhotoOutboxChanged } from "@/lib/photo-outbox";
 import { PHOTO_BATCH_LIMIT, preparePhoto, runWithConcurrency, type PreparedPhoto } from "@/lib/photo-preparation";
+import { canUseResumableUploads, RESUMABLE_UPLOAD_THRESHOLD, uploadPhotoResumable } from "@/lib/resumable-photo-upload";
 import type { MaintenancePhoto, MaintenanceTask, PhotoType, SpaceRecord } from "@/types/domain";
 
 type UploadMessage = { tone: "success" | "error" | "info"; text: string };
 type UploadProgress = { completed: number; total: number };
+type UploadStage = "idle" | "preparing" | "uploading" | "saving" | "queueing";
+type ConnectionStatus = "online" | "slow" | "offline";
+type BrowserNetworkInformation = EventTarget & { effectiveType?: string; downlink?: number; rtt?: number; saveData?: boolean };
+
+function currentConnectionStatus(): ConnectionStatus {
+  if (typeof navigator === "undefined") return "online";
+  if (!navigator.onLine) return "offline";
+  const connection = (navigator as Navigator & { connection?: BrowserNetworkInformation }).connection;
+  if (!connection) return "online";
+  const slowType = connection.effectiveType === "slow-2g" || connection.effectiveType === "2g";
+  return slowType || connection.saveData === true || (connection.downlink != null && connection.downlink < 1) || (connection.rtt != null && connection.rtt > 800)
+    ? "slow"
+    : "online";
+}
+
+function uploadStageLabel(stage: UploadStage) {
+  if (stage === "preparing") return "Preparando imagen";
+  if (stage === "uploading") return "Subiendo evidencia";
+  if (stage === "saving") return "Guardando evidencia";
+  if (stage === "queueing") return "Guardando en el dispositivo";
+  return "Procesando";
+}
 
 function getCurrentPosition(): Promise<{ latitude: number; longitude: number } | null> {
   if (typeof navigator === "undefined" || !navigator.geolocation) return Promise.resolve(null);
@@ -44,6 +68,9 @@ export function PhotoUpload({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<UploadMessage>();
   const [progress, setProgress] = useState<UploadProgress>({ completed: 0, total: 0 });
+  const [currentFileProgress, setCurrentFileProgress] = useState(0);
+  const [stage, setStage] = useState<UploadStage>("idle");
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>("online");
   const [pendingCount, setPendingCount] = useState(0);
   const cameraInput = useRef<HTMLInputElement>(null);
   const galleryInput = useRef<HTMLInputElement>(null);
@@ -54,9 +81,24 @@ export function PhotoUpload({
     refresh();
     const unsubscribe = onPhotoOutboxChanged(refresh);
     const trySync = () => { const client = getSupabaseBrowserClient(); if (client && navigator.onLine) void flushPhotoOutbox(client); };
+    const retryTimer = window.setInterval(trySync, 60_000);
     window.addEventListener("online", trySync);
     trySync();
-    return () => { active = false; unsubscribe(); window.removeEventListener("online", trySync); };
+    return () => { active = false; unsubscribe(); window.clearInterval(retryTimer); window.removeEventListener("online", trySync); };
+  }, []);
+
+  useEffect(() => {
+    const connection = (navigator as Navigator & { connection?: BrowserNetworkInformation }).connection;
+    const refresh = () => setConnectionStatus(currentConnectionStatus());
+    refresh();
+    window.addEventListener("online", refresh);
+    window.addEventListener("offline", refresh);
+    connection?.addEventListener("change", refresh);
+    return () => {
+      window.removeEventListener("online", refresh);
+      window.removeEventListener("offline", refresh);
+      connection?.removeEventListener("change", refresh);
+    };
   }, []);
 
   function addSelectedFiles(selected: FileList | null) {
@@ -80,6 +122,8 @@ export function PhotoUpload({
   function clearSelection() {
     setFiles([]);
     setProgress({ completed: 0, total: 0 });
+    setCurrentFileProgress(0);
+    setStage("idle");
     setMessage(undefined);
     if (cameraInput.current) cameraInput.current.value = "";
     if (galleryInput.current) galleryInput.current.value = "";
@@ -97,6 +141,8 @@ export function PhotoUpload({
     setBusy(true);
     setMessage(undefined);
     setProgress({ completed: 0, total: selectedFiles.length });
+    setCurrentFileProgress(0);
+    setStage("preparing");
 
     try {
       const client = getSupabaseBrowserClient();
@@ -108,8 +154,10 @@ export function PhotoUpload({
       ]);
       const userId = session?.user?.id;
       if (!userId) throw new Error("Inicia sesion para guardar evidencias.");
+      const accessToken = session.access_token;
 
-      const offline = typeof navigator !== "undefined" && !navigator.onLine;
+      const connectionAtStart = currentConnectionStatus();
+      const offline = connectionAtStart === "offline";
       const batchStartedAt = new Date().toISOString();
       const today = batchStartedAt.slice(0, 10);
       let taskForUpload = selectedSpace?.task;
@@ -135,15 +183,27 @@ export function PhotoUpload({
           taskForUpload = localTask;
           uploadTaskId = seed.id;
         } else {
-          const { data: taskData, error: taskError } = await client.from("maintenance_tasks").insert(seed).select().single();
-          if (taskError) {
-            if (!isNetworkError(taskError.message)) throw taskError;
+          try {
+            const { data: taskData, error: taskError } = await withTimeout(
+              client.from("maintenance_tasks").insert(seed).select().single(),
+              20_000,
+              "La conexión está lenta o inestable. El registro se guardará en el dispositivo.",
+            );
+            if (taskError) {
+              if (!isNetworkError(taskError.message)) throw taskError;
+              taskSeed = seed;
+              taskForUpload = localTask;
+              uploadTaskId = seed.id;
+            } else {
+              taskForUpload = taskData as MaintenanceTask;
+              uploadTaskId = taskForUpload.id;
+            }
+          } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : "No se pudo crear el mantenimiento.";
+            if (!isNetworkError(errorMessage)) throw error;
             taskSeed = seed;
             taskForUpload = localTask;
             uploadTaskId = seed.id;
-          } else {
-            taskForUpload = taskData as MaintenanceTask;
-            uploadTaskId = taskForUpload.id;
           }
         }
       }
@@ -157,8 +217,10 @@ export function PhotoUpload({
       let originalBytes = 0;
       let outputBytes = 0;
 
-      await runWithConcurrency(selectedFiles, 2, async (file) => {
+      await runWithConcurrency(selectedFiles, 1, async (file) => {
         try {
+          setStage("preparing");
+          setCurrentFileProgress(0);
           const prepared = await preparePhoto(file);
           originalBytes += prepared.originalBytes;
           outputBytes += prepared.outputBytes;
@@ -172,9 +234,14 @@ export function PhotoUpload({
             selectedSpace,
             effectiveSpaceName,
             userId,
+            accessToken,
             location,
             type,
             forceQueue: offline || Boolean(taskSeed),
+            preferResumable: connectionAtStart === "slow" || prepared.blob.size >= RESUMABLE_UPLOAD_THRESHOLD,
+            onStage: setStage,
+            onProgress: setCurrentFileProgress,
+            onSlowConnection: () => setConnectionStatus("slow"),
             onUploaded,
           });
           if (result === "queued") queuedCount += 1;
@@ -184,6 +251,7 @@ export function PhotoUpload({
           errors.push(error instanceof Error ? error.message : `No se pudo subir ${file.name}.`);
         } finally {
           setProgress((current) => ({ ...current, completed: current.completed + 1 }));
+          setCurrentFileProgress(0);
         }
       });
 
@@ -196,8 +264,10 @@ export function PhotoUpload({
           text: `${uploadedCount + queuedCount} de ${selectedFiles.length} fotos procesadas. ${failedFiles.length} quedaron listas para reintentar. ${errors[0]}`,
         });
       } else {
-        const savedText = queuedCount
-          ? `${queuedCount} quedaron en espera y se subiran al recuperar conexion.`
+        const savedText = queuedCount === 1
+          ? "La foto quedó guardada en este dispositivo y se subirá automáticamente cuando mejore internet."
+          : queuedCount > 1
+          ? `${queuedCount} fotos quedaron guardadas en este dispositivo y se subirán automáticamente cuando mejore internet.`
           : `${uploadedCount} se guardaron correctamente.`;
         const reduction = originalBytes > 0 ? Math.max(0, Math.round((1 - outputBytes / originalBytes) * 100)) : 0;
         setMessage({
@@ -209,11 +279,13 @@ export function PhotoUpload({
       setMessage({ tone: "error", text: error instanceof Error ? error.message : "No se pudieron subir las fotos." });
     } finally {
       setBusy(false);
+      setStage("idle");
+      setCurrentFileProgress(0);
     }
   }
 
   const selectedBytes = files.reduce((total, file) => total + file.size, 0);
-  const progressPercent = progress.total ? Math.round((progress.completed / progress.total) * 100) : 0;
+  const progressPercent = progress.total ? Math.round(((progress.completed + currentFileProgress / 100) / progress.total) * 100) : 0;
 
   return <form className="upload-form" onSubmit={submit}>
     <div className="upload-heading"><Camera size={18} /><div><strong>Nueva evidencia</strong></div></div>
@@ -235,11 +307,13 @@ export function PhotoUpload({
       <div><strong>{files.length === 1 ? files[0].name : `${files.length} fotos seleccionadas`}</strong><span>{formatBytes(selectedBytes)} en total</span></div>
       <button type="button" disabled={busy} onClick={clearSelection} aria-label="Quitar fotos seleccionadas" title="Quitar seleccion"><X size={15} /></button>
     </div>}
+    {connectionStatus === "slow" && <p className="form-message connection-note slow"><TriangleAlert size={14} /><span><strong>Internet lento.</strong> La carga puede demorar; si se corta, guardaremos la foto en este dispositivo.</span></p>}
+    {connectionStatus === "offline" && <p className="form-message connection-note offline"><CloudOff size={14} /><span><strong>Sin internet.</strong> La foto quedará guardada en este dispositivo y se subirá automáticamente.</span></p>}
     {busy && <div className="upload-progress" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progressPercent}>
-      <div><span>Procesando lote</span><strong>{progress.completed}/{progress.total}</strong></div>
+      <div><span>{uploadStageLabel(stage)}</span><strong>{progress.completed}/{progress.total}</strong></div>
       <i><span style={{ width: `${progressPercent}%` }} /></i>
     </div>}
-    <div className="upload-actions"><select disabled={busy} value={type} onChange={(event) => setType(event.target.value as PhotoType)}><option value="antes">1er control</option><option value="durante">2do control</option><option value="despues">3er control</option></select><button disabled={!files.length || busy || (!taskId && !selectedSpace)}>{busy ? <LoaderCircle className="spin" size={16} /> : <Upload size={16} />}{busy ? "Procesando..." : files.length > 1 ? `Subir ${files.length} fotos` : "Subir foto"}</button></div>
+    <div className="upload-actions"><select disabled={busy} value={type} onChange={(event) => setType(event.target.value as PhotoType)}><option value="antes">1er control</option><option value="durante">2do control</option><option value="despues">3er control</option></select><button disabled={!files.length || busy || (!taskId && !selectedSpace)}>{busy ? <LoaderCircle className="spin" size={16} /> : <Upload size={16} />}{busy ? `${uploadStageLabel(stage)}...` : files.length > 1 ? `Subir ${files.length} fotos` : "Subir foto"}</button></div>
     {message && <p className={`form-message ${message.tone}`}>{message.tone === "error" ? <TriangleAlert size={14} /> : <Check size={14} />}{message.text}</p>}
     {pendingCount > 0 && <p className="form-message offline-note"><CloudOff size={14} />{pendingCount === 1 ? "1 evidencia esperando conexion para subirse" : `${pendingCount} evidencias esperando conexion para subirse`}</p>}
   </form>;
@@ -255,9 +329,14 @@ async function savePreparedPhoto({
   selectedSpace,
   effectiveSpaceName,
   userId,
+  accessToken,
   location,
   type,
   forceQueue,
+  preferResumable,
+  onStage,
+  onProgress,
+  onSlowConnection,
   onUploaded,
 }: {
   client: NonNullable<ReturnType<typeof getSupabaseBrowserClient>>;
@@ -269,9 +348,14 @@ async function savePreparedPhoto({
   selectedSpace?: SpaceRecord;
   effectiveSpaceName?: string;
   userId: string;
+  accessToken: string;
   location: { latitude: number; longitude: number } | null;
   type: PhotoType;
   forceQueue: boolean;
+  preferResumable: boolean;
+  onStage: (stage: UploadStage) => void;
+  onProgress: (percent: number) => void;
+  onSlowConnection: () => void;
   onUploaded: (photo: MaintenancePhoto, spaceId?: string, task?: MaintenanceTask) => void;
 }): Promise<"uploaded" | "queued"> {
   const nowIso = new Date().toISOString();
@@ -289,6 +373,8 @@ async function savePreparedPhoto({
   };
 
   const queueIt = async () => {
+    onStage("queueing");
+    onProgress(0);
     await addPhotoToOutbox({
       id: photoId,
       path,
@@ -305,17 +391,48 @@ async function savePreparedPhoto({
 
   if (forceQueue) return queueIt();
 
-  const { error: uploadError } = await client.storage.from("maintenance-photos").upload(path, prepared.blob, {
-    contentType: prepared.contentType,
-    cacheControl: "3600",
-    upsert: false,
-  });
-  if (uploadError) {
-    if (isNetworkError(uploadError.message)) return queueIt();
-    throw uploadError;
+  onStage("uploading");
+  try {
+    if (preferResumable && canUseResumableUploads()) {
+      await uploadPhotoResumable({ blob: prepared.blob, path, contentType: prepared.contentType, accessToken, onProgress, onSlowConnection });
+    } else {
+      const slowConnectionTimer = window.setTimeout(onSlowConnection, 12_000);
+      try {
+        const { error: uploadError } = await withTimeout(
+          client.storage.from("maintenance-photos").upload(path, prepared.blob, {
+            contentType: prepared.contentType,
+            cacheControl: "3600",
+            upsert: false,
+          }),
+          30_000,
+          "La conexión está lenta o inestable. La foto se guardará en este dispositivo.",
+        );
+        if (uploadError) throw new Error(uploadError.message);
+        onProgress(100);
+      } finally {
+        window.clearTimeout(slowConnectionTimer);
+      }
+    }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "No se pudo subir la foto.";
+    if (isNetworkError(errorMessage)) return queueIt();
+    throw error;
   }
 
-  const { data, error: rowError } = await client.from("maintenance_photos").insert(row).select().single();
+  onStage("saving");
+  let rowResult: Awaited<ReturnType<typeof insertPhotoRow>>;
+  try {
+    rowResult = await withTimeout(
+      insertPhotoRow(client, row),
+      20_000,
+      "La conexión está lenta o inestable. La foto se guardará en este dispositivo.",
+    );
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "No se pudo guardar la evidencia.";
+    if (isNetworkError(errorMessage)) return queueIt();
+    throw error;
+  }
+  const { data, error: rowError } = rowResult;
   if (rowError) {
     if (isNetworkError(rowError.message)) return queueIt();
     await client.storage.from("maintenance-photos").remove([path]);
@@ -324,6 +441,10 @@ async function savePreparedPhoto({
 
   onUploaded(data as MaintenancePhoto, selectedSpace?.id, taskForUpload);
   return "uploaded";
+}
+
+function insertPhotoRow(client: NonNullable<ReturnType<typeof getSupabaseBrowserClient>>, row: Record<string, unknown>) {
+  return client.from("maintenance_photos").insert(row).select().single();
 }
 
 function resetFileInputs(cameraInput: React.RefObject<HTMLInputElement | null>, galleryInput: React.RefObject<HTMLInputElement | null>) {

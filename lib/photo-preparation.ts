@@ -1,3 +1,5 @@
+import { withTimeout } from "./async-timeout";
+
 const MAX_SOURCE_BYTES = 30 * 1024 * 1024;
 const MAX_IMAGE_EDGE = 1920;
 const PASSTHROUGH_BYTES = 2 * 1024 * 1024;
@@ -40,7 +42,11 @@ export async function preparePhoto(file: File): Promise<PreparedPhoto> {
   // perder la evidencia.
   let decoded: Awaited<ReturnType<typeof decodeImage>>;
   try {
-    decoded = await decodeImage(file);
+    decoded = await withTimeout(
+      decodeImage(file),
+      12_000,
+      "El teléfono demoró demasiado en preparar la imagen. Se usará el archivo original.",
+    );
   } catch {
     return passthrough(file);
   }
@@ -67,7 +73,11 @@ export async function preparePhoto(file: File): Promise<PreparedPhoto> {
     context.fillRect(0, 0, canvas.width, canvas.height);
     context.drawImage(decoded.image, 0, 0, canvas.width, canvas.height);
 
-    const blob = await canvasToBlob(canvas, "image/jpeg", JPEG_QUALITY);
+    const blob = await withTimeout(
+      canvasToBlob(canvas, "image/jpeg", JPEG_QUALITY),
+      12_000,
+      "El teléfono demoró demasiado en comprimir la imagen. Se usará el archivo original.",
+    );
     // Si la "compresion" agranda el archivo, mejor el original.
     if (blob.size >= file.size && /image\/(jpeg|webp)/i.test(file.type)) return passthrough(file);
     return {
