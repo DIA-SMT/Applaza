@@ -14,8 +14,14 @@ export type PhotoOutboxEntry = {
   queuedAt: string;
 };
 
+// En disco la foto se guarda como bytes crudos (ArrayBuffer): almacenar Blobs
+// en IndexedDB se cuelga o se corrompe en varios Android/WebKit. Se mantiene
+// compatibilidad de lectura con entradas viejas que tengan Blob.
+type StoredPhotoEntry = Omit<PhotoOutboxEntry, "blob"> & { blob?: Blob; buffer?: ArrayBuffer };
+
 const DB_NAME = "applaza-offline";
 const STORE = "photo-outbox";
+const IDB_TIMEOUT_MESSAGE = "El almacenamiento del dispositivo no responde. Cerrá otras pestañas de Applaza y reintentá la subida.";
 const listeners = new Set<() => void>();
 let flushing = false;
 
@@ -24,10 +30,13 @@ function notifyChanged() { listeners.forEach((listener) => listener()); }
 
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
+    if (typeof indexedDB === "undefined") { reject(new Error("Este navegador no permite guardar fotos en el dispositivo.")); return; }
+    const timer = setTimeout(() => reject(new Error(IDB_TIMEOUT_MESSAGE)), 5_000);
     const request = indexedDB.open(DB_NAME, 1);
     request.onupgradeneeded = () => { if (!request.result.objectStoreNames.contains(STORE)) request.result.createObjectStore(STORE, { keyPath: "id" }); };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
+    request.onsuccess = () => { clearTimeout(timer); resolve(request.result); };
+    request.onerror = () => { clearTimeout(timer); reject(request.error); };
+    request.onblocked = () => { clearTimeout(timer); reject(new Error(IDB_TIMEOUT_MESSAGE)); };
   });
 }
 
@@ -37,17 +46,26 @@ function withStore<T>(mode: IDBTransactionMode, run: (store: IDBObjectStore) => 
     const request = run(transaction.objectStore(STORE));
     transaction.oncomplete = () => { db.close(); resolve(request.result); };
     transaction.onerror = () => { db.close(); reject(transaction.error); };
+    transaction.onabort = () => { db.close(); reject(transaction.error ?? new Error(IDB_TIMEOUT_MESSAGE)); };
   }));
 }
 
 export async function addPhotoToOutbox(entry: PhotoOutboxEntry) {
-  await withStore("readwrite", (store) => store.put(entry));
+  const { blob, ...rest } = entry;
+  const buffer = await withTimeout(blob.arrayBuffer(), 10_000, "No se pudo leer la foto para guardarla en el dispositivo. Reintentá la subida.");
+  const stored: StoredPhotoEntry = { ...rest, buffer };
+  await withTimeout(withStore("readwrite", (store) => store.put(stored)), 10_000, IDB_TIMEOUT_MESSAGE);
   notifyChanged();
 }
 
 export function listPhotoOutbox(): Promise<PhotoOutboxEntry[]> {
   if (typeof indexedDB === "undefined") return Promise.resolve([]);
-  return withStore("readonly", (store) => store.getAll() as IDBRequest<PhotoOutboxEntry[]>).catch(() => []);
+  return withStore("readonly", (store) => store.getAll() as IDBRequest<StoredPhotoEntry[]>)
+    .then((records) => records.map((record) => ({
+      ...record,
+      blob: record.blob instanceof Blob ? record.blob : new Blob([record.buffer ?? new ArrayBuffer(0)], { type: record.contentType }),
+    })))
+    .catch(() => []);
 }
 
 export async function countPhotoOutbox(): Promise<number> { return (await listPhotoOutbox()).length; }
