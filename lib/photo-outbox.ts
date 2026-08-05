@@ -51,6 +51,10 @@ function withStore<T>(mode: IDBTransactionMode, run: (store: IDBObjectStore) => 
 }
 
 export async function addPhotoToOutbox(entry: PhotoOutboxEntry) {
+  // Pedir almacenamiento persistente para que el sistema no purgue la cola
+  // si el dispositivo se queda sin espacio. Es fire-and-forget: si el
+  // navegador no lo soporta o lo niega, la cola funciona igual.
+  try { void navigator.storage?.persist?.(); } catch { /* sin soporte */ }
   const { blob, ...rest } = entry;
   const buffer = await withTimeout(blob.arrayBuffer(), 10_000, "No se pudo leer la foto para guardarla en el dispositivo. Reintentá la subida.");
   const stored: StoredPhotoEntry = { ...rest, buffer };
