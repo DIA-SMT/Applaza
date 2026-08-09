@@ -13,6 +13,29 @@ import type { MaintenancePhoto, MaintenanceTask, PhotoType, SpaceRecord } from "
 type UploadMessage = { tone: "success" | "error" | "info"; text: string };
 type UploadProgress = { completed: number; total: number };
 type UploadStage = "idle" | "preparing" | "uploading" | "saving" | "queueing";
+const UNREADABLE_PHOTO_MESSAGE = "El telefono no dejo leer la foto. Si esta guardada solo en la nube, abrila primero en la galeria para que se descargue, o sacala con \"Sacar foto\".";
+
+// Copia los bytes apenas se elige la imagen. En Android el selector entrega una
+// referencia (content://) que el sistema puede invalidar despues -y el pedido de
+// GPS previo a la subida da tiempo de sobra a que eso pase-, o que nunca se
+// puede leer si la foto vive solo en la nube: ahi aparece NotReadableError.
+async function snapshotFile(file: File): Promise<File> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const buffer = await file.arrayBuffer();
+      if (!buffer.byteLength) throw new Error("El archivo llego vacio.");
+      return new File([buffer], file.name, { type: file.type || "image/jpeg", lastModified: file.lastModified });
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(UNREADABLE_PHOTO_MESSAGE);
+}
+
+function friendlyUploadError(message: string) {
+  return /could not be read|notreadable|permission problems|llego vacio/i.test(message) ? UNREADABLE_PHOTO_MESSAGE : message;
+}
 type ConnectionStatus = "online" | "slow" | "offline";
 type BrowserNetworkInformation = EventTarget & { effectiveType?: string; downlink?: number; rtt?: number; saveData?: boolean };
 
@@ -65,6 +88,7 @@ export function PhotoUpload({
   const effectiveSpaceName = spaceName ?? selectedSpace?.name;
   const [type, setType] = useState<PhotoType>("durante");
   const [files, setFiles] = useState<File[]>([]);
+  const [readingFiles, setReadingFiles] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<UploadMessage>();
   const [progress, setProgress] = useState<UploadProgress>({ completed: 0, total: 0 });
@@ -101,22 +125,40 @@ export function PhotoUpload({
     };
   }, []);
 
-  function addSelectedFiles(selected: FileList | null) {
+  async function addSelectedFiles(selected: FileList | null) {
     if (!selected?.length) return;
 
     const incoming = Array.from(selected).filter((file) => file.type.startsWith("image/"));
+    const skippedNonImages = incoming.length !== selected.length;
     const next = [...files];
-    for (const file of incoming) {
-      const duplicate = next.some((item) => item.name === file.name && item.size === file.size && item.lastModified === file.lastModified);
-      if (!duplicate && next.length < PHOTO_BATCH_LIMIT) next.push(file);
+    const unreadable: string[] = [];
+    let overflow = false;
+
+    setReadingFiles(true);
+    setMessage(undefined);
+    try {
+      for (const file of incoming) {
+        const duplicate = next.some((item) => item.name === file.name && item.size === file.size && item.lastModified === file.lastModified);
+        if (duplicate) continue;
+        if (next.length >= PHOTO_BATCH_LIMIT) { overflow = true; continue; }
+        try {
+          next.push(await snapshotFile(file));
+        } catch {
+          unreadable.push(file.name);
+        }
+      }
+    } finally {
+      setFiles(next);
+      setReadingFiles(false);
     }
 
-    setFiles(next);
-    setMessage(incoming.length !== selected.length
-      ? { tone: "error", text: "Se omitieron archivos que no eran imagenes." }
-      : next.length < files.length + incoming.length
-        ? { tone: "info", text: `Puedes cargar hasta ${PHOTO_BATCH_LIMIT} fotos por lote.` }
-        : undefined);
+    setMessage(unreadable.length
+      ? { tone: "error", text: `${UNREADABLE_PHOTO_MESSAGE} (${unreadable.join(", ")})` }
+      : skippedNonImages
+        ? { tone: "error", text: "Se omitieron archivos que no eran imagenes." }
+        : overflow
+          ? { tone: "info", text: `Puedes cargar hasta ${PHOTO_BATCH_LIMIT} fotos por lote.` }
+          : undefined);
   }
 
   function clearSelection() {
@@ -248,7 +290,7 @@ export function PhotoUpload({
           else uploadedCount += 1;
         } catch (error) {
           failedFiles.push(file);
-          errors.push(error instanceof Error ? error.message : `No se pudo subir ${file.name}.`);
+          errors.push(friendlyUploadError(error instanceof Error ? error.message : `No se pudo subir ${file.name}.`));
         } finally {
           setProgress((current) => ({ ...current, completed: current.completed + 1 }));
           setCurrentFileProgress(0);
@@ -276,7 +318,7 @@ export function PhotoUpload({
         });
       }
     } catch (error) {
-      setMessage({ tone: "error", text: error instanceof Error ? error.message : "No se pudieron subir las fotos." });
+      setMessage({ tone: "error", text: friendlyUploadError(error instanceof Error ? error.message : "No se pudieron subir las fotos.") });
     } finally {
       setBusy(false);
       setStage("idle");
@@ -297,11 +339,12 @@ export function PhotoUpload({
     }} placeholder="Buscar por nombre, barrio o seccion" /><datalist id="upload-space-options">{spaceOptions.map((space) => <option key={space.id} value={optionLabel(space)} />)}</datalist></label>}
     {taskId && effectiveSpaceName && <div className="upload-space-readonly"><MapPin size={14} /><span>{effectiveSpaceName}</span></div>}
     <div className="upload-source-actions">
-      <button disabled={busy} type="button" className="source-button" onClick={() => cameraInput.current?.click()}><Camera size={18} /><span>Sacar foto</span></button>
-      <button disabled={busy} type="button" className="source-button" onClick={() => galleryInput.current?.click()}><ImagePlus size={18} /><span>Elegir galeria</span></button>
-      <input ref={cameraInput} type="file" accept="image/*" capture="environment" onChange={(event) => addSelectedFiles(event.target.files)} />
-      <input ref={galleryInput} type="file" accept="image/*" multiple onChange={(event) => addSelectedFiles(event.target.files)} />
+      <button disabled={busy || readingFiles} type="button" className="source-button" onClick={() => cameraInput.current?.click()}><Camera size={18} /><span>Sacar foto</span></button>
+      <button disabled={busy || readingFiles} type="button" className="source-button" onClick={() => galleryInput.current?.click()}><ImagePlus size={18} /><span>Elegir galeria</span></button>
+      <input ref={cameraInput} type="file" accept="image/*" capture="environment" onChange={(event) => void addSelectedFiles(event.target.files)} />
+      <input ref={galleryInput} type="file" accept="image/*" multiple onChange={(event) => void addSelectedFiles(event.target.files)} />
     </div>
+    {readingFiles && <p className="form-message info"><LoaderCircle className="spin" size={14} />Leyendo las fotos del telefono...</p>}
     {files.length > 0 && <div className="upload-selected-batch">
       <Check size={15} />
       <div><strong>{files.length === 1 ? files[0].name : `${files.length} fotos seleccionadas`}</strong><span>{formatBytes(selectedBytes)} en total</span></div>
@@ -313,7 +356,7 @@ export function PhotoUpload({
       <div><span>{uploadStageLabel(stage)}</span><strong>{progress.completed}/{progress.total}</strong></div>
       <i><span style={{ width: `${progressPercent}%` }} /></i>
     </div>}
-    <div className="upload-actions"><select disabled={busy} value={type} onChange={(event) => setType(event.target.value as PhotoType)}><option value="antes">1er control</option><option value="durante">2do control</option><option value="despues">3er control</option></select><button disabled={!files.length || busy || (!taskId && !selectedSpace)}>{busy ? <LoaderCircle className="spin" size={16} /> : <Upload size={16} />}{busy ? `${uploadStageLabel(stage)}...` : files.length > 1 ? `Subir ${files.length} fotos` : "Subir foto"}</button></div>
+    <div className="upload-actions"><select disabled={busy} value={type} onChange={(event) => setType(event.target.value as PhotoType)}><option value="antes">1er control</option><option value="durante">2do control</option><option value="despues">3er control</option></select><button disabled={!files.length || busy || readingFiles || (!taskId && !selectedSpace)}>{busy ? <LoaderCircle className="spin" size={16} /> : <Upload size={16} />}{busy ? `${uploadStageLabel(stage)}...` : files.length > 1 ? `Subir ${files.length} fotos` : "Subir foto"}</button></div>
     {message && <p className={`form-message ${message.tone}`}>{message.tone === "error" ? <TriangleAlert size={14} /> : <Check size={14} />}{message.text}</p>}
     {pendingCount > 0 && <p className="form-message offline-note"><CloudOff size={14} />{pendingCount === 1 ? "1 evidencia esperando conexion para subirse" : `${pendingCount} evidencias esperando conexion para subirse`}</p>}
   </form>;
