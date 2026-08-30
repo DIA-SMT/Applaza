@@ -69,7 +69,7 @@ export async function POST(request: Request) {
     if (!apiKey) {
       const reportContent = `${localAnswer}\n\nRecomendaciones operativas:\n- Priorizar cooperativas con pendientes altos.\n- Revisar espacios sin evidencia reciente.\n- Validar observaciones cargadas por supervision antes del cierre del periodo.`;
       return NextResponse.json({
-        answer: shouldAttachReport ? buildReportChatAnswer(context) : `${localAnswer}\n\nNota: falta configurar OPENROUTER_API_KEY, por eso respondi con el motor local de resumen.`,
+        answer: shouldAttachReport ? buildReportChatAnswer(context) : localAnswer,
         mode: "local",
         report: shouldAttachReport ? buildReportPayload(reportContent, context) : null,
       });
@@ -431,7 +431,7 @@ async function askOpenRouter({
   if (!response.ok) {
     const details = await response.text();
     console.error("OpenRouter response error:", details);
-    return `${buildLocalAnswer(message, context)}\n\nNota: no pude conectar con la API de IA, asi que use el resumen local.`;
+    return buildLocalAnswer(message, context);
   }
 
   const payload = await response.json();
