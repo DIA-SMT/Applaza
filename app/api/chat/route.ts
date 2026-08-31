@@ -44,7 +44,10 @@ export async function POST(request: Request) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ answer: "Necesitas iniciar sesion para usar el asistente." }, { status: 401 });
 
-    const month = detectRequestedMonth(message) ?? currentMonth();
+    const previousMessages = previousUserMessages(history);
+    const monthSource = [message, ...previousMessages].find((text) => detectExplicitMonth(text));
+    const month = (monthSource ? detectExplicitMonth(monthSource) : null) ?? currentMonth();
+    const monthFromHistory = Boolean(monthSource) && monthSource !== message;
     const [{ spaces, providers, error }, recordsResult, observationsResult] = await Promise.all([
       getDashboardData(supabase),
       supabase.from("control_records").select("provider_id,green_space_id,period_month,control_1,control_1_date,control_2,control_2_date,control_3,control_3_date,updated_at").eq("period_month", `${month}-01`),
@@ -53,9 +56,14 @@ export async function POST(request: Request) {
 
     const records = (recordsResult.data ?? []) as ControlRecord[];
     const observations = (observationsResult.data ?? []) as AuditObservation[];
-    const requestedProvider = findRequestedProvider(message, providers);
+    const namedProvider = findRequestedProvider(message, providers);
+    const inheritedProvider = namedProvider ? undefined : previousMessages.map((text) => findRequestedProvider(text, providers)).find(Boolean);
+    const requestedProvider = namedProvider ?? inheritedProvider;
     const context = buildAssistantContext({
       message,
+      previousMessages,
+      providerFromHistory: !namedProvider && Boolean(inheritedProvider),
+      monthFromHistory,
       month,
       spaces,
       providers,
@@ -136,6 +144,9 @@ function sanitizeHistory(items: unknown[]): ChatHistoryItem[] {
 
 function buildAssistantContext({
   message,
+  previousMessages,
+  providerFromHistory,
+  monthFromHistory,
   month,
   spaces,
   providers,
@@ -147,6 +158,9 @@ function buildAssistantContext({
   observationsError,
 }: {
   message: string;
+  previousMessages: string[];
+  providerFromHistory: boolean;
+  monthFromHistory: boolean;
   month: string;
   spaces: SpaceRecord[];
   providers: Provider[];
@@ -232,7 +246,17 @@ function buildAssistantContext({
     dataWarnings: [dataError, recordsError, observationsError].filter(Boolean),
   };
 
-  const mentionedSpaces = findRequestedSpaces(message, spaces, recordsBySpace, month);
+  const namedSpaces = findRequestedSpaces(message, spaces, recordsBySpace, month);
+  const inheritedSpaces = namedSpaces.length
+    ? []
+    : previousMessages.flatMap((text) => findRequestedSpaces(text, spaces, recordsBySpace, month)).slice(0, 3);
+  const mentionedSpaces = namedSpaces.length ? namedSpaces : inheritedSpaces;
+
+  const conversationFocus = {
+    providerFromHistory,
+    monthFromHistory,
+    spacesFromHistory: !namedSpaces.length && inheritedSpaces.length > 0,
+  };
 
   const evidenceActivity = focusedProvider
     ? focusedProvider.evidenceActivity
@@ -241,7 +265,7 @@ function buildAssistantContext({
     ? focusedProvider.reviewCadence
     : buildReviewCadence(records);
 
-  return { summary, providerRows, pendingSpaces, recentObservations, focusedProvider, mentionedSpaces, evidenceActivity, reviewCadence };
+  return { summary, providerRows, pendingSpaces, recentObservations, focusedProvider, mentionedSpaces, conversationFocus, evidenceActivity, reviewCadence };
 }
 
 function buildLocalAnswer(message: string, context: ReturnType<typeof buildAssistantContext>) {
@@ -358,6 +382,9 @@ function findRequestedProvider(message: string, providers: Provider[]) {
 }
 
 function shouldAttachProviderReport(context: ReturnType<typeof buildAssistantContext>) {
+  // El listado largo se adjunta como PDF solo cuando el usuario nombra la cooperativa en el mensaje.
+  // Si el foco viene arrastrado de turnos anteriores hay que responder la pregunta, no repetir el informe.
+  if (context.conversationFocus.providerFromHistory) return false;
   return Boolean(context.focusedProvider && context.focusedProvider.pending > 6);
 }
 
@@ -572,6 +599,7 @@ async function askOpenRouter({
     "Responde en espanol claro, profesional y breve.",
     "Interpreta lenguaje coloquial del usuario y traducilo a consultas operativas, por ejemplo: pasame lo del mes, que onda las ubicaciones, quien viene flojo, hay muchas notas.",
     "Usa solo los datos incluidos en el contexto. Si falta un dato, aclaralo. Si el contexto incluye focusedProvider, prioriza ese bloque y no resumas como listado completo si faltan items.",
+    "La conversacion es continua: el historial viene en los mensajes previos y el contexto arrastra el foco de turnos anteriores. conversationFocus indica si la cooperativa (providerFromHistory), el mes (monthFromHistory) o los espacios (spacesFromHistory) vienen de un mensaje anterior y no del actual. Usalo para resolver consultas de seguimiento como dame el pdf, y ese cada cuanto se reviso, y en julio, sin volver a preguntar de que se trata. Si la nueva consulta es claramente general, responde en general aunque haya foco heredado.",
     "mentionedSpaces trae el detalle de los espacios nombrados en la consulta: tipo (Plaza, Espacio verde o Platabanda), direccion, barrio, seccion, cooperativa, si esta ubicado y sus fechas de control. Respondé el tipo y la direccion solo desde ahi. Si el espacio no figura en mentionedSpaces, decí que no lo encontraste en los datos del periodo en lugar de suponerlo.",
     "evidenceActivity describe la produccion de evidencias: topDays son los dias con mas fotos cargadas, byWeekday el acumulado por dia de semana e historyByMonth la carga de los ultimos meses. reviewCadence describe la frecuencia real de revisiones: datedVisits son los controles con fecha, averageDaysBetweenVisits el promedio de dias entre visitas al mismo espacio, firstVisit y lastVisit los extremos del periodo, visitsByRound cuantos controles se registraron en cada vuelta y undatedControls los controles cargados sin fecha. Usalos cuando pregunten por produccion, dias fuertes o cada cuanto se revisa.",
     reportMode
@@ -623,16 +651,34 @@ function extractChatCompletionText(payload: unknown) {
   return typeof message.content === "string" ? message.content : "";
 }
 
-function detectRequestedMonth(message: string) {
-  const explicit = message.match(/\b(20\d{2})-(0[1-9]|1[0-2])\b/);
-  if (explicit) return explicit[0];
+const MONTH_NAMES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+const MONTH_ALIASES: Record<string, number> = { setiembre: 8 };
 
-  const lower = message.toLocaleLowerCase("es");
+function detectExplicitMonth(message: string) {
+  const iso = message.match(/\b(20\d{2})-(0[1-9]|1[0-2])\b/);
+  if (iso) return iso[0];
+
+  const normalized = normalizeText(message);
   const now = new Date();
-  if (lower.includes("ultimo mes") || lower.includes("mes pasado")) {
-    now.setMonth(now.getMonth() - 1);
-  }
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  if (normalized.includes("mes pasado") || normalized.includes("ultimo mes")) return monthKey(new Date(now.getFullYear(), now.getMonth() - 1, 1));
+  if (normalized.includes("este mes") || normalized.includes("mes actual")) return monthKey(now);
+
+  const namedIndex = MONTH_NAMES.findIndex((name) => normalized.includes(name));
+  const aliasIndex = Object.entries(MONTH_ALIASES).find(([alias]) => normalized.includes(alias))?.[1];
+  const monthIndex = namedIndex >= 0 ? namedIndex : aliasIndex;
+  if (monthIndex == null) return null;
+
+  const namedYear = normalized.match(/\b(20\d{2})\b/);
+  const year = namedYear ? Number(namedYear[1]) : monthIndex > now.getMonth() ? now.getFullYear() - 1 : now.getFullYear();
+  return monthKey(new Date(year, monthIndex, 1));
+}
+
+function monthKey(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function previousUserMessages(history: ChatHistoryItem[]) {
+  return history.filter((item) => item.role === "user").map((item) => item.content).reverse();
 }
 
 function currentMonth() {
