@@ -1,5 +1,15 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { getDashboardData } from "@/lib/dashboard-data";
+import {
+  answerSaysDataIsMissing,
+  buildMigueReport,
+  detectMigueTopic,
+  getMigueReportConfig,
+  readOpenRouterUsage,
+  sendMigueReport,
+  type MigueReportInput,
+  type MigueUsage,
+} from "@/lib/migue-report";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import type { Provider, SpaceRecord, SpaceType } from "@/types/domain";
 
@@ -34,6 +44,10 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
+  const startedAt = Date.now();
+  // Solo se reporta una consulta valida de alguien logueado (no los 400 ni 401).
+  let reportableQuestion = "";
+  let reportTopic = "Resumen operativo";
   try {
     const body = await request.json();
     const message = typeof body.message === "string" ? body.message.trim() : "";
@@ -43,6 +57,7 @@ export async function POST(request: Request) {
     const supabase = await getSupabaseServerClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ answer: "Necesitas iniciar sesion para usar el asistente." }, { status: 401 });
+    reportableQuestion = message;
 
     const previousMessages = previousUserMessages(history);
     const monthSource = [message, ...previousMessages].find((text) => detectExplicitMonth(text));
@@ -77,9 +92,20 @@ export async function POST(request: Request) {
 
     const localAnswer = buildLocalAnswer(message, context);
     const shouldAttachReport = isReportRequest(message) || shouldAttachProviderReport(context);
+    const { spacesFromHistory, providerFromHistory } = context.conversationFocus;
+    const topic = detectMigueTopic(message, {
+      mentionsSpaces: context.mentionedSpaces.length > 0 && !spacesFromHistory,
+      focusedProvider: Boolean(context.focusedProvider) && !providerFromHistory,
+      reportRequest: shouldAttachReport,
+      spacesFromHistory: context.mentionedSpaces.length > 0 && spacesFromHistory,
+      providerFromHistory: Boolean(context.focusedProvider) && providerFromHistory,
+    });
+    reportTopic = topic;
     const apiKey = process.env.OPENROUTER_API_KEY;
     if (!apiKey) {
       const reportContent = `${localAnswer}\n\nRecomendaciones operativas:\n- Priorizar cooperativas con pendientes altos.\n- Revisar espacios sin evidencia reciente.\n- Validar observaciones cargadas por supervision antes del cierre del periodo.`;
+      reportToMigue({ question: message, topic, answered: true, ok: true, usage: null, ms: Date.now() - startedAt });
+      reportableQuestion = "";
       return NextResponse.json({
         answer: shouldAttachReport ? buildReportChatAnswer(context) : localAnswer,
         mode: "local",
@@ -87,7 +113,30 @@ export async function POST(request: Request) {
       });
     }
 
-    const aiAnswer = await askOpenRouter({ apiKey, message, history, context, reportMode: shouldAttachReport });
+    const measured: { usage: MigueUsage | null } = { usage: null };
+    const aiAnswer = await askOpenRouter({
+      apiKey,
+      message,
+      history,
+      context,
+      reportMode: shouldAttachReport,
+      // Sin reporte configurado no se pide el consumo: la llamada queda igual que siempre.
+      onUsage: getMigueReportConfig()
+        ? (usage) => {
+            measured.usage = usage;
+          }
+        : undefined,
+    });
+    reportToMigue({
+      question: message,
+      topic,
+      // Un pedido de informe siempre se responde (el PDF se arma con los datos del periodo).
+      answered: shouldAttachReport || !answerSaysDataIsMissing(aiAnswer),
+      ok: true,
+      usage: measured.usage,
+      ms: Date.now() - startedAt,
+    });
+    reportableQuestion = "";
     return NextResponse.json({
       answer: shouldAttachReport ? buildReportChatAnswer(context) : aiAnswer,
       mode: "openrouter",
@@ -95,7 +144,33 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     console.error("Assistant chat error:", error);
+    if (reportableQuestion) {
+      reportToMigue({ question: reportableQuestion, topic: reportTopic, answered: false, ok: false, usage: null, ms: Date.now() - startedAt });
+    }
     return NextResponse.json({ answer: "No pude procesar la consulta. Revisa la configuracion del asistente e intenta nuevamente." }, { status: 500 });
+  }
+}
+
+// Manda la consulta al dashboard de la Direccion de IA (ver lib/migue-report.ts).
+// Apagado sin MIGUE_API_KEY. Se programa con after() para que corra cuando la
+// respuesta ya salio: nunca demora ni corta la respuesta del asistente.
+function reportToMigue(input: MigueReportInput) {
+  try {
+    const config = getMigueReportConfig();
+    if (!config) return;
+    const id = crypto.randomUUID();
+    const finishedAt = Date.now();
+    // El reporte se arma dentro de la tarea: nada de este trabajo corre antes de responder.
+    const task = () => sendMigueReport(buildMigueReport(input, id, finishedAt, { sendQuestions: config.sendQuestions }), config);
+    try {
+      after(task);
+    } catch {
+      // Fuera del contexto del pedido after() no esta disponible: se manda igual,
+      // sin esperar (sendMigueReport nunca tira).
+      void task();
+    }
+  } catch (error) {
+    console.warn("[migue] no se pudo preparar el reporte", error);
   }
 }
 
@@ -587,12 +662,15 @@ async function askOpenRouter({
   history,
   context,
   reportMode = false,
+  onUsage,
 }: {
   apiKey: string;
   message: string;
   history: ChatHistoryItem[];
   context: ReturnType<typeof buildAssistantContext>;
   reportMode?: boolean;
+  // Recibe tokens y costo de la llamada, para las metricas de Migue.
+  onUsage?: (usage: MigueUsage) => void;
 }) {
   const systemPrompt = [
     "Sos Migue, el asistente de Applaza para gestion municipal de espacios verdes, un servicio de la Direccion de Inteligencia Artificial de la Municipalidad de San Miguel de Tucuman. Los informes que generas se emiten a nombre de la Direccion de Inteligencia Artificial. Si el usuario te llama Migue, responde naturalmente a ese nombre.",
@@ -628,6 +706,8 @@ async function askOpenRouter({
           content: `Consulta: ${message}\n\nContexto operativo disponible:\n${JSON.stringify(context, null, 2)}`,
         },
       ],
+      // Con el reporte a Migue activo, pide a OpenRouter el costo junto con los tokens.
+      ...(onUsage ? { usage: { include: true } } : {}),
     }),
   });
 
@@ -638,6 +718,14 @@ async function askOpenRouter({
   }
 
   const payload = await response.json();
+  if (onUsage) {
+    try {
+      const usage = readOpenRouterUsage(payload);
+      if (usage) onUsage(usage);
+    } catch {
+      // Las metricas nunca cortan la respuesta.
+    }
+  }
   return extractChatCompletionText(payload) || buildLocalAnswer(message, context);
 }
 
