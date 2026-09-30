@@ -95,6 +95,26 @@ export function detectMigueTopic(message: string, flags: MigueTopicFlags): strin
   return "Resumen operativo";
 }
 
+// Aperturas que dicen que falta el dato, con los calificativos habituales: "No hay datos
+// disponibles para ese espacio", "No tengo suficiente informacion sobre...". "No hay datos de
+// fotos en ..." sin "disponibles" ni "ese/esa" se deja como respuesta: puede ser un resultado.
+const MISSING_DATA_START = new RegExp(
+  [
+    "^(lo siento,? )?(",
+    [
+      "no (lo |la |los |las )?(encontr[eo]|encuentro|pude encontrar)",
+      "no se encontr",
+      "no (tengo|dispongo de|cuento con) (suficientes? )?(ese|esa|el|la|esos|esas|informacion|datos?)",
+      "no hay (suficientes? )?(informacion|datos) (disponibles?|suficientes?)",
+      "no hay suficientes? (informacion|datos)",
+      "no hay (informacion|datos) (de|sobre|para) (ese|esa|el|la|esos|esas)",
+      "no (esta|estan) disponibles? (ese|esa|el|la|esos|esas|los|las) (dato|datos|informacion)",
+      "(ese|esa|el|la) ?(espacio|plaza|dato|cooperativa)? no (esta|figura|aparece)n? en (los datos|el contexto)",
+    ].join("|"),
+    ")",
+  ].join(""),
+);
+
 // Sin respuesta es cuando Migue ARRANCA diciendo que no tiene el dato (el prompt le pide avisarlo).
 // Solo se mira la primera oracion: una respuesta completa suele cerrar con una aclaracion del tipo
 // "no hay datos de fotos en X", y eso no la hace una consulta sin responder. Tampoco cuenta un
@@ -102,10 +122,8 @@ export function detectMigueTopic(message: string, flags: MigueTopicFlags): strin
 export function answerSaysDataIsMissing(answer: string): boolean {
   const text = plain(answer.replace(/[*#_>`]/g, "").trim());
   const firstSentence = text.split(/(?<=[.!?])\s|\n/)[0] ?? "";
-  if (/no encontre (pendientes|observaciones|evidencias|controles|registros|fotos)\b/.test(firstSentence)) return false;
-  return /^(lo siento,? )?(no (lo |la |los |las )?(encontr[eo]|encuentro|pude encontrar)|no se encontr|no (tengo|dispongo de|cuento con) (ese|esa|el|la|esos|esas|informacion|datos?)|no hay (informacion|datos) (de|sobre|para) (ese|esa|el|la|esos|esas)|(ese|esa|el|la) ?(espacio|plaza|dato|cooperativa)? no (esta|figura|aparece) en (los datos|el contexto))/.test(
-    firstSentence,
-  );
+  if (/no (se )?encontr(e|aron) (pendientes|observaciones|evidencias|controles|registros|fotos)\b/.test(firstSentence)) return false;
+  return MISSING_DATA_START.test(firstSentence);
 }
 
 // Lee tokens y costo de la respuesta de OpenRouter (el costo llega con usage: { include: true }).

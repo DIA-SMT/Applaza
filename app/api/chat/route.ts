@@ -113,7 +113,8 @@ export async function POST(request: Request) {
       });
     }
 
-    const measured: { usage: MigueUsage | null } = { usage: null };
+    const measured: { usage: MigueUsage | null; fellBack: boolean } = { usage: null, fellBack: false };
+    const migueOn = getMigueReportConfig() !== null;
     const aiAnswer = await askOpenRouter({
       apiKey,
       message,
@@ -121,18 +122,25 @@ export async function POST(request: Request) {
       context,
       reportMode: shouldAttachReport,
       // Sin reporte configurado no se pide el consumo: la llamada queda igual que siempre.
-      onUsage: getMigueReportConfig()
+      onUsage: migueOn
         ? (usage) => {
             measured.usage = usage;
+          }
+        : undefined,
+      onFallback: migueOn
+        ? () => {
+            measured.fellBack = true;
           }
         : undefined,
     });
     reportToMigue({
       question: message,
       topic,
-      // Un pedido de informe siempre se responde (el PDF se arma con los datos del periodo).
-      answered: shouldAttachReport || !answerSaysDataIsMissing(aiAnswer),
-      ok: true,
+      // Si OpenRouter fallo y se respondio con el motor local, cuenta como falla del asistente:
+      // una caida del proveedor no puede inflar la efectividad. Un pedido de informe con la IA
+      // funcionando siempre se responde (el PDF se arma con los datos del periodo).
+      answered: !measured.fellBack && (shouldAttachReport || !answerSaysDataIsMissing(aiAnswer)),
+      ok: !measured.fellBack,
       usage: measured.usage,
       ms: Date.now() - startedAt,
     });
@@ -663,6 +671,7 @@ async function askOpenRouter({
   context,
   reportMode = false,
   onUsage,
+  onFallback,
 }: {
   apiKey: string;
   message: string;
@@ -671,7 +680,16 @@ async function askOpenRouter({
   reportMode?: boolean;
   // Recibe tokens y costo de la llamada, para las metricas de Migue.
   onUsage?: (usage: MigueUsage) => void;
+  // Avisa que OpenRouter fallo y se respondio con el motor local, para las metricas de Migue.
+  onFallback?: () => void;
 }) {
+  const reportFallback = () => {
+    try {
+      onFallback?.();
+    } catch {
+      // Las metricas nunca cortan la respuesta.
+    }
+  };
   const systemPrompt = [
     "Sos Migue, el asistente de Applaza para gestion municipal de espacios verdes, un servicio de la Direccion de Inteligencia Artificial de la Municipalidad de San Miguel de Tucuman. Los informes que generas se emiten a nombre de la Direccion de Inteligencia Artificial. Si el usuario te llama Migue, responde naturalmente a ese nombre.",
     "Responde en espanol claro, profesional y breve.",
@@ -714,6 +732,7 @@ async function askOpenRouter({
   if (!response.ok) {
     const details = await response.text();
     console.error("OpenRouter response error:", details);
+    reportFallback();
     return buildLocalAnswer(message, context);
   }
 
@@ -726,7 +745,10 @@ async function askOpenRouter({
       // Las metricas nunca cortan la respuesta.
     }
   }
-  return extractChatCompletionText(payload) || buildLocalAnswer(message, context);
+  const aiText = extractChatCompletionText(payload);
+  if (aiText) return aiText;
+  reportFallback();
+  return buildLocalAnswer(message, context);
 }
 
 function extractChatCompletionText(payload: unknown) {
