@@ -1,9 +1,14 @@
 import { withTimeout } from "./async-timeout";
 
 const MAX_SOURCE_BYTES = 30 * 1024 * 1024;
-const MAX_IMAGE_EDGE = 1920;
-const PASSTHROUGH_BYTES = 2 * 1024 * 1024;
-const JPEG_QUALITY = 0.82;
+// Medidas pensadas para el plan gratuito de Supabase (1 GB de Storage por
+// organizacion): una foto de evidencia queda en ~200-350 KB.
+const MAX_IMAGE_EDGE = 1600;
+const PASSTHROUGH_BYTES = 400 * 1024;
+const JPEG_QUALITY = 0.72;
+// Si el telefono no puede recomprimir, el original solo se acepta hasta este
+// peso: un unico archivo de 30 MB ocupa lo mismo que cien fotos comprimidas.
+const MAX_UNCOMPRESSED_BYTES = 8 * 1024 * 1024;
 
 export const PHOTO_BATCH_LIMIT = 40;
 
@@ -96,6 +101,9 @@ export async function preparePhoto(file: File): Promise<PreparedPhoto> {
 }
 
 function passthrough(file: File): PreparedPhoto {
+  if (file.size > MAX_UNCOMPRESSED_BYTES) {
+    throw new Error(`${file.name} no se pudo comprimir en este teléfono y pesa más de 8 MB. Sacala de nuevo con la cámara en formato JPG ("Más compatible" en iPhone).`);
+  }
   const contentType = file.type || "image/jpeg";
   return {
     blob: file,
