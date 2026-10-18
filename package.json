@@ -9,6 +9,7 @@
     "geocode": "node scripts/geocode-green-spaces.mjs",
     "names:sql": "node scripts/build-name-corrections-sql.mjs",
     "fields:sql": "node scripts/build-field-corrections-sql.mjs",
+    "photos:report": "node scripts/photo-storage-report.mjs",
     "start": "next start",
     "lint": "next lint"
   },
