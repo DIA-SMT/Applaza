@@ -1,11 +1,12 @@
 # Evita que el proyecto gratuito de Supabase se pause por inactividad
-# haciendo una consulta minima a la API REST dos veces por semana.
+# escribiendo un latido en la base todos los dias (supabase/keep_alive.sql).
+# Un SELECT anonimo que RLS deja vacio no alcanzo: el proyecto se pauso igual.
 name: Supabase keep-alive
 
 on:
   schedule:
-    # Lunes y jueves a las 12:00 UTC (09:00 en Argentina)
-    - cron: "0 12 * * 1,4"
+    # Todos los dias a las 12:00 UTC (09:00 en Argentina)
+    - cron: "0 12 * * *"
   workflow_dispatch:
 
 jobs:
@@ -23,14 +24,17 @@ jobs:
             exit 1
           fi
 
-          # Con RLS la anon key recibe [] pero la consulta llega igual a Postgres.
-          status=$(curl -sS -o /dev/null -w "%{http_code}" \
+          # public.keep_alive() actualiza la fila de public.keep_alive y
+          # devuelve la hora del latido.
+          status=$(curl -sS -o response.txt -w "%{http_code}" \
             --retry 3 --retry-delay 10 \
-            "$SUPABASE_URL/rest/v1/providers?select=id&limit=1" \
+            -X POST "$SUPABASE_URL/rest/v1/rpc/keep_alive" \
             -H "apikey: $SUPABASE_ANON_KEY" \
-            -H "Authorization: Bearer $SUPABASE_ANON_KEY")
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{}')
 
-          echo "Respuesta de Supabase: HTTP $status"
+          echo "Respuesta de Supabase: HTTP $status $(cat response.txt)"
           if [ "$status" != "200" ]; then
             echo "::error::Supabase respondio HTTP $status"
             exit 1
