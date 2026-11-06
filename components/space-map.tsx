@@ -3,9 +3,8 @@ import L from "leaflet";
 import { useEffect, useMemo, useState } from "react";
 import { Circle, CircleMarker, MapContainer, Marker, Polyline, ScaleControl, TileLayer, Tooltip, useMap, useMapEvents, ZoomControl } from "react-leaflet";
 import type { GeoPoint, SpaceRecord } from "@/types/domain";
-import { getBasemap } from "@/lib/basemap";
+import { BASEMAP } from "@/lib/basemap";
 
-const basemap = getBasemap();
 const CLUSTER_MAX_ZOOM = 14;
 const CLUSTER_MIN_SIZE = 3;
 
@@ -45,7 +44,7 @@ export default function SpaceMap({ spaces, selected, onSelect, locationMode = fa
     return { clusters, singles };
   }, [spaces, zoom, pathSpaceIds]);
   return <MapContainer center={[-26.8304, -65.2145]} zoom={13} className="map" zoomControl={false}>
-    <TileLayer key={basemap.provider} attribution={basemap.attribution} url={basemap.url} maxZoom={basemap.maxZoom} />
+    <TileLayer attribution={BASEMAP.attribution} url={BASEMAP.url} maxZoom={BASEMAP.maxZoom} />
     <Recenter selected={selected} />
     <FitVisibleSpaces spaces={spaces} />
     <ZoomControl position="bottomright" />

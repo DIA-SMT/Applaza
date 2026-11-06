@@ -108,7 +108,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  if (url.hostname.endsWith("basemaps.cartocdn.com") || url.hostname.endsWith("tile.openstreetmap.org")) {
+  if (url.hostname.endsWith("tile.openstreetmap.org")) {
     event.respondWith(staleWhileRevalidate(CACHES.tiles, request, TILE_LIMIT));
     return;
   }
