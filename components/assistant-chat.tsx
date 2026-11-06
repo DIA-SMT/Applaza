@@ -95,14 +95,21 @@ export function AssistantChat() {
     try { const saved = localStorage.getItem("migue-bubble-position"); if (saved) setBubblePosition(snapToEdge(clampBubble(JSON.parse(saved)), 120)); } catch { /* posición guardada inválida */ }
   }, []);
 
+  // Espacio ocupado por la barra de navegación inferior (solo visible en celulares).
+  function maxBubbleY() {
+    const bottomNav = document.querySelector<HTMLElement>(".bottom-nav");
+    const reserved = bottomNav && bottomNav.offsetParent !== null ? bottomNav.getBoundingClientRect().height : 0;
+    return window.innerHeight - 60 - reserved;
+  }
+
   function clampBubble(position: { x: number; y: number }) {
-    return { x: Math.min(Math.max(position.x, 8), window.innerWidth - 128), y: Math.min(Math.max(position.y, 8), window.innerHeight - 60) };
+    return { x: Math.min(Math.max(position.x, 8), window.innerWidth - 128), y: Math.min(Math.max(position.y, 8), maxBubbleY()) };
   }
 
   function snapToEdge(position: { x: number; y: number }, width: number) {
     const margin = 12;
     const snappedX = position.x + width / 2 < window.innerWidth / 2 ? margin : window.innerWidth - width - margin;
-    return { x: snappedX, y: Math.min(Math.max(position.y, 8), window.innerHeight - 60) };
+    return { x: snappedX, y: Math.min(Math.max(position.y, 8), maxBubbleY()) };
   }
 
   function onBubblePointerDown(event: ReactPointerEvent<HTMLButtonElement>) {

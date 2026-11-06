@@ -1,8 +1,10 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useState } from "react";
-import { Building2, Camera, Check, ChevronRight, ClipboardCheck, Eye, FileText, LayoutDashboard, LoaderCircle, LogOut, Map, MapPin, Menu, MessageSquarePlus, Route, Save, Search, Trees, TriangleAlert, UsersRound, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ArrowRight, Camera, Check, ChevronRight, ClipboardCheck, Eye, FileText, Home, Images, LayoutDashboard, LoaderCircle, LogOut, Map, MapPin, Menu, MessageSquarePlus, Route, Save, Search, Trees, TriangleAlert, UsersRound, X } from "lucide-react";
+import { CityLockup } from "./city-lockup";
+import { MascotaApplaza } from "./mascota-applaza";
 import type { MaintenancePhoto, MaintenanceTask, Provider, SpaceRecord, UserProfile } from "@/types/domain";
 import { buildEstimatedDistanceReport, formatEstimatedKm, type EstimatedDistanceReport } from "@/lib/estimated-distance";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
@@ -34,6 +36,9 @@ export function DashboardView({ initialSpaces, providers, currentUser, userProfi
   const canSeeAudit = currentUser.role === "admin" || currentUser.role === "auditor";
   const [view, setView] = useState<View>(isAuditorOnly ? "audit" : "dashboard");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const mobileNavRef = useRef<HTMLElement>(null);
+  const navWasOpen = useRef(false);
   const [spaces, setSpaces] = useState(initialSpaces);
   const [locateSpaceId, setLocateSpaceId] = useState<string>();
   const distanceReport = useMemo(() => buildEstimatedDistanceReport(spaces, userProfiles, currentUser, currentMonth()), [spaces, userProfiles, currentUser]);
@@ -46,6 +51,39 @@ export function DashboardView({ initialSpaces, providers, currentUser, userProfi
     { key: "providers" as const, label: "Cooperativas activas", value: providers.filter((provider) => provider.active).length, icon: UsersRound, tone: "purple" },
   ];
   const latestPhotos = spaces.flatMap((space) => space.photos.map((photo) => ({ ...photo, spaceName: space.name }))).sort((left, right) => right.created_at.localeCompare(left.created_at));
+
+  useEffect(() => {
+    if (!mobileNavOpen) {
+      if (navWasOpen.current) menuButtonRef.current?.focus();
+      navWasOpen.current = false;
+      return;
+    }
+    navWasOpen.current = true;
+    const drawer = mobileNavRef.current;
+    drawer?.querySelector<HTMLElement>("button")?.focus();
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setMobileNavOpen(false);
+        return;
+      }
+      if (event.key !== "Tab" || !drawer) return;
+      const focusable = Array.from(drawer.querySelectorAll<HTMLElement>("button:not([disabled])"));
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [mobileNavOpen]);
 
   async function signOut() {
     await getSupabaseBrowserClient()?.auth.signOut();
@@ -73,24 +111,29 @@ export function DashboardView({ initialSpaces, providers, currentUser, userProfi
   }
 
   return <div className="app-shell">
-    <aside className="sidebar">
-      <AppBrand />
+    {mobileNavOpen && <button className="mobile-nav-backdrop" aria-label="Cerrar menú" tabIndex={-1} onClick={() => setMobileNavOpen(false)} />}
+    <aside ref={mobileNavRef} id="menu-movil" className={`mobile-nav ${mobileNavOpen ? "open" : ""}`} role="dialog" aria-modal="true" aria-label="Menú principal" aria-hidden={!mobileNavOpen} inert={!mobileNavOpen}>
+      <div className="mobile-nav-head">
+        <CityLockup compact />
+        <button className="mobile-nav-close" onClick={() => setMobileNavOpen(false)} aria-label="Cerrar menú"><X size={20} /></button>
+      </div>
       <AppNav view={view} onChange={changeView} role={currentUser.role} />
-      <div className="sidebar-foot"><Building2 /><div><strong>Municipalidad de SMT</strong><span>Gestion Ambiental</span></div></div>
-    </aside>
-
-    {mobileNavOpen && <button className="mobile-nav-backdrop" aria-label="Cerrar menu" onClick={() => setMobileNavOpen(false)} />}
-    <aside className={`mobile-nav ${mobileNavOpen ? "open" : ""}`} aria-hidden={!mobileNavOpen}>
-      <AppBrand />
-      <AppNav view={view} onChange={changeView} role={currentUser.role} />
-      <button className="mobile-nav-signout" onClick={signOut}><LogOut size={16} />Cerrar sesion</button>
+      {!isAuditorOnly && <button className="mobile-nav-cta" onClick={() => changeView("map")}><Map size={17} />Abrir mapa operativo</button>}
+      <div className="mobile-nav-migue">
+        <div><strong>Migue de Applaza</strong><span>Tu asistente para el cuidado de los espacios verdes.</span></div>
+        <MascotaApplaza variant="avatar" size={86} decorative />
+      </div>
+      <div className="mobile-nav-user"><span>{currentUser.full_name.slice(0, 2).toUpperCase()}</span><div><strong>{currentUser.full_name}</strong><small>{roleLabel(currentUser.role)}</small></div></div>
+      <button className="mobile-nav-signout" onClick={signOut}><LogOut size={16} />Cerrar sesión</button>
     </aside>
 
     <main className="main">
       <header className="topbar">
-        <button className="mobile-menu" onClick={() => setMobileNavOpen(true)} aria-label="Abrir menu"><Menu /></button>
-        <div><span>San Miguel de Tucuman</span><strong>{viewTitle(view, currentUser.role)}</strong></div>
-        <div className="user"><span>{currentUser.full_name.slice(0, 2).toUpperCase()}</span><div><strong>{currentUser.full_name}</strong><small>{roleLabel(currentUser.role)}</small></div><button className="logout-button" onClick={signOut} title="Cerrar sesion"><LogOut size={17} /></button></div>
+        <div className="topbar-title"><span>San Miguel de Tucumán</span><strong>{viewTitle(view, currentUser.role)}</strong></div>
+        <button className="topbar-lockup" onClick={() => changeView(isAuditorOnly ? "audit" : "dashboard")} aria-label="Applaza, ir al inicio"><CityLockup priority /></button>
+        <div className="topnav"><AppNav view={view} onChange={changeView} role={currentUser.role} /></div>
+        <div className="user"><span>{currentUser.full_name.slice(0, 2).toUpperCase()}</span><div><strong>{currentUser.full_name}</strong><small>{roleLabel(currentUser.role)}</small></div><button className="logout-button" onClick={signOut} title="Cerrar sesión" aria-label="Cerrar sesión"><LogOut size={17} /></button></div>
+        <button ref={menuButtonRef} className="mobile-menu" onClick={() => setMobileNavOpen(true)} aria-label="Abrir menú" aria-expanded={mobileNavOpen} aria-controls="menu-movil"><Menu size={19} /><span>Menú</span></button>
       </header>
       {view === "audit"
         ? <AuditDashboard
@@ -105,14 +148,16 @@ export function DashboardView({ initialSpaces, providers, currentUser, userProfi
         ? <OperationalMap spaces={spaces} providers={providers} currentUser={currentUser} dataError={dataError} setSpaces={setSpaces} locateSpaceId={locateSpaceId} />
         : view === "control"
           ? <ControlRegister providers={providers} spaces={spaces} />
-          : <Dashboard spaces={spaces} providers={providers} currentUser={currentUser} stats={stats} distanceReport={distanceReport} latestPhotos={latestPhotos} dataError={dataError} onPhoto={addPhoto} onOpenMap={() => changeView("map")} onOpenReports={() => changeView("audit")} onUpdateSpace={(updated) => setSpaces((current) => current.map((space) => space.id === updated.id ? updated : space))} onLocateSpace={locateFromDashboard} />}
+          : <Dashboard spaces={spaces} providers={providers} currentUser={currentUser} stats={stats} distanceReport={distanceReport} latestPhotos={latestPhotos} dataError={dataError} onPhoto={addPhoto} onOpenMap={() => changeView("map")} onOpenReports={() => changeView("audit")} onOpenControl={() => changeView("control")} onUpdateSpace={(updated) => setSpaces((current) => current.map((space) => space.id === updated.id ? updated : space))} onLocateSpace={locateFromDashboard} />}
       <AssistantChat />
     </main>
+    {!isAuditorOnly && <nav className="bottom-nav" aria-label="Navegación inferior">
+      <button className={view === "dashboard" ? "active" : ""} aria-current={view === "dashboard" ? "page" : undefined} onClick={() => changeView("dashboard")}><Home /><span>Inicio</span></button>
+      <button className={view === "map" ? "active" : ""} aria-current={view === "map" ? "page" : undefined} onClick={() => changeView("map")}><Map /><span>Mapa</span></button>
+      <button className={view === "control" ? "active" : ""} aria-current={view === "control" ? "page" : undefined} onClick={() => changeView("control")}><ClipboardCheck /><span>Control</span></button>
+      <button className={view === "audit" ? "active" : ""} aria-current={view === "audit" ? "page" : undefined} onClick={() => changeView("audit")}>{canSeeAudit ? <Eye /> : <FileText />}<span>{canSeeAudit ? "Auditoría" : "Informes"}</span></button>
+    </nav>}
   </div>;
-}
-
-function AppBrand() {
-  return <div className="brand"><div className="brand-mark"><Image src="/logo-municipal.png" alt="Municipalidad de San Miguel de Tucuman" width={42} height={42} priority /></div><div><strong>Applaza</strong><span>Gestion de espacios verdes</span></div></div>;
 }
 
 function AppNav({ view, onChange, role }: { view: View; onChange: (view: View) => void; role: UserProfile["role"] }) {
@@ -156,6 +201,7 @@ function Dashboard({
   onPhoto,
   onOpenMap,
   onOpenReports,
+  onOpenControl,
   onUpdateSpace,
   onLocateSpace,
 }: {
@@ -169,6 +215,7 @@ function Dashboard({
   onPhoto: (photo: MaintenancePhoto, spaceId?: string, task?: MaintenanceTask) => void;
   onOpenMap: () => void;
   onOpenReports: () => void;
+  onOpenControl: () => void;
   onUpdateSpace: (space: SpaceRecord) => void;
   onLocateSpace: (space: SpaceRecord) => void;
 }) {
@@ -177,16 +224,66 @@ function Dashboard({
   const selectedSpace = spaces.find((space) => space.id === selectedSpaceId);
   const listedSpaces = [...spaces].sort((left, right) => left.name.localeCompare(right.name, "es")).slice(0, 6);
 
+  const firstName = currentUser.full_name.split(/\s+/)[0] || "equipo";
+  const canAudit = currentUser.role === "admin" || currentUser.role === "auditor";
+  const pendingCount = spaces.filter((space) => space.latitude == null || space.longitude == null).length;
+  const scrollTo = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  const openMetric = (metric: MetricKey) => {
+    setActiveMetric(metric);
+    scrollTo("padron");
+  };
+  const quickAccess = [
+    { key: "spaces", title: "Espacios verdes", detail: "Plazas, parques y paseos", icon: Trees, tone: "blue", onClick: () => openMetric("all") },
+    { key: "control", title: "Registro de control", detail: "Controles por cooperativa", icon: ClipboardCheck, tone: "yellow", onClick: onOpenControl },
+    { key: "reports", title: canAudit ? "Auditoría" : "Informes", detail: canAudit ? "Seguimiento de controles" : "Informes de gestión", icon: canAudit ? Eye : FileText, tone: "sky", onClick: onOpenReports },
+    { key: "evidence", title: "Cargar evidencia", detail: "Fotos de campo", icon: Camera, tone: "green", onClick: () => scrollTo("cargar-evidencia") },
+  ];
+  const shortcuts = [
+    { key: "map", label: "Mapa interactivo", icon: MapPin, onClick: onOpenMap },
+    { key: "gallery", label: "Galería de evidencias", icon: Images, onClick: () => scrollTo("ultimas-evidencias") },
+    { key: "observations", label: "Observaciones", icon: MessageSquarePlus, onClick: () => scrollTo("observaciones") },
+    { key: "routes", label: "Recorridos", icon: Route, onClick: () => openMetric("distance") },
+  ];
+
   return <div className="content dashboard">
-    <div className="page-heading dashboard-heading"><div><p>PADRON MUNICIPAL</p><h1>Estado general</h1><span>Seguimiento de espacios verdes cargados desde el documento.</span></div><div className="page-actions"><button className="secondary-action" onClick={onOpenReports}><FileText size={17} />Informes</button><button className="primary" onClick={onOpenMap}><Map size={17} />Abrir mapa</button></div></div>
+    <section className="welcome-hero" aria-labelledby="welcome-title">
+      <div className="welcome-copy">
+        <p className="eyebrow">Municipalidad de San Miguel de Tucumán</p>
+        <h1 id="welcome-title">Applaza <span>Espacios Verdes</span></h1>
+        <p>Hola, {firstName}. Gestión, control y mantenimiento de plazas, parques y espacios verdes de la Ciudad{pendingCount ? ` · ${pendingCount} espacios pendientes de ubicar.` : "."}</p>
+        <div className="welcome-actions">
+          <button className="hero-primary" onClick={() => openMetric("all")}><Trees size={18} />Gestionar espacios<ArrowRight size={17} /></button>
+          <button className="hero-secondary" onClick={onOpenMap}><MapPin size={18} />Ver mapa de plazas</button>
+        </div>
+      </div>
+      <div className="welcome-migue"><MascotaApplaza size={360} decorative priority /></div>
+      <svg className="hero-waves" viewBox="0 0 1200 110" preserveAspectRatio="none" aria-hidden="true">
+        <path className="wave-sky" d="M0 110V62c230 40 470 44 700 10 190-28 350-46 500-30v68z" />
+        <path className="wave-yellow" d="M0 110V84c240 26 480 26 720 0 180-20 330-30 480-18v44z" />
+        <path className="wave-white" d="M0 110V100c260 10 520 8 780-8 160-10 300-14 420-8v26z" />
+      </svg>
+    </section>
+    <nav className="quick-access" aria-label="Accesos rápidos">
+      {quickAccess.map(({ key, title, detail, icon: Icon, tone, onClick }) => <button key={key} className={`quick-card ${tone}`} onClick={onClick}>
+        <span className="quick-icon"><Icon /></span>
+        <span className="quick-text"><strong>{title}</strong><small>{detail}</small></span>
+        <span className="quick-arrow" aria-hidden="true"><ArrowRight size={16} /></span>
+        <Icon className="quick-ghost" aria-hidden="true" />
+      </button>)}
+    </nav>
+    <h2 className="section-heading">Accesos rápidos</h2>
+    <div className="shortcut-row">
+      {shortcuts.map(({ key, label, icon: Icon, onClick }) => <button key={key} className="shortcut-tile" onClick={onClick}><Icon aria-hidden="true" /><span>{label}</span></button>)}
+    </div>
+    <h2 className="section-heading" id="padron">Indicadores del padrón</h2>
     {dataError && <div className="dashboard-error"><TriangleAlert size={18} /><div><strong>No se pudieron actualizar los datos</strong><span>{dataError}</span></div></div>}
     <div className="stats-grid">{stats.map(({ key, label, value, icon: Icon, tone }) => <button className={`stat-card ${activeMetric === key ? "active" : ""}`} key={label} onClick={() => setActiveMetric(key)}><div className={`stat-icon ${tone}`}><Icon /></div><div><span>{label}</span><strong>{value}</strong></div><ChevronRight size={16} /></button>)}</div>
     <MetricDetailPanel metric={activeMetric} spaces={spaces} providers={providers} distanceReport={distanceReport} onOpenMap={onOpenMap} onSelectSpace={(space) => setSelectedSpaceId(space.id)} onLocateSpace={onLocateSpace} />
     <div className="dashboard-grid">
       <section className="card"><div className="card-title"><div><h2>Espacios cargados</h2><p>Primeros registros disponibles del documento</p></div><button onClick={onOpenMap}>Ver mapa <ChevronRight size={16} /></button></div>{listedSpaces.length ? <div className="task-list">{listedSpaces.map((space) => <button key={space.id} onClick={onOpenMap}><span className="space-dot" /><div><strong>{space.name}</strong><small>{space.provider?.name || "Sin cooperativa asignada"}</small></div><span className="space-section-label">{space.section_code ? `Seccion ${space.section_code}` : space.source_type || "Espacio"}</span><ChevronRight size={17} /></button>)}</div> : <p className="dashboard-empty">No hay espacios cargados.</p>}</section>
-      <section className="card evidence-card"><div className="card-title"><div><h2>Cargar evidencia</h2><p>Foto tomada en campo y asociada al espacio verde</p></div><Camera size={20} /></div><PhotoUpload spaces={spaces} onUploaded={onPhoto} /></section>
+      <section className="card evidence-card" id="cargar-evidencia"><div className="card-title"><div><h2>Cargar evidencia</h2><p>Foto tomada en campo y asociada al espacio verde</p></div><Camera size={20} /></div><PhotoUpload spaces={spaces} onUploaded={onPhoto} /></section>
       <SupervisorObservations spaces={spaces} currentUser={currentUser} />
-      <section className="card"><div className="card-title"><div><h2>Ultimas evidencias</h2><p>Fotos cargadas recientemente</p></div><Camera size={20} /></div>{latestPhotos.length ? <div className="recent-photos">{latestPhotos.slice(0, 4).map((photo) => <figure key={photo.id}><Image src={photo.image_url} alt={photo.spaceName} width={320} height={180} unoptimized={photo.image_url.startsWith("blob:")} /><figcaption><strong>{photo.spaceName}</strong><span>{photoTypeLabel(photo.photo_type)}</span></figcaption></figure>)}</div> : <p className="dashboard-empty">No hay fotos cargadas.</p>}</section>
+      <section className="card" id="ultimas-evidencias"><div className="card-title"><div><h2>Últimas evidencias</h2><p>Fotos cargadas recientemente</p></div><Camera size={20} /></div>{latestPhotos.length ? <div className="recent-photos">{latestPhotos.slice(0, 4).map((photo) => <figure key={photo.id}><Image src={photo.image_url} alt={photo.spaceName} width={320} height={180} unoptimized={photo.image_url.startsWith("blob:")} /><figcaption><strong>{photo.spaceName}</strong><span>{photoTypeLabel(photo.photo_type)}</span></figcaption></figure>)}</div> : <p className="dashboard-empty">No hay fotos cargadas.</p>}</section>
     </div>
     {selectedSpace && <SpaceDetail space={selectedSpace} providers={providers} currentUser={currentUser} onClose={() => setSelectedSpaceId(undefined)} onPhoto={(photo) => onPhoto(photo)} onUpdate={onUpdateSpace} onRelocate={onLocateSpace} />}
   </div>;
@@ -416,7 +513,7 @@ function SupervisorObservations({ spaces, currentUser }: { spaces: SpaceRecord[]
     .map((observation) => ({ ...observation, space: spaces.find((space) => space.id === observation.green_space_id) }))
     .slice(0, 6);
 
-  return <section className="card summary-observations-card">
+  return <section className="card summary-observations-card" id="observaciones">
     <div className="card-title">
       <div>
         <h2>Observaciones operativas</h2>
