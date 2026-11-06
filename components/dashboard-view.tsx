@@ -95,14 +95,19 @@ export function DashboardView({ initialSpaces, providers, currentUser, userProfi
   function changeView(nextView: View) {
     if (isAuditorOnly && nextView !== "audit") return;
     if (nextView !== "map") setLocateSpaceId(undefined);
+    const sameView = nextView === view;
     setView(nextView);
     setMobileNavOpen(false);
+    // Tocar la sección en la que ya estás la lleva arriba (como en las apps del celular);
+    // al cambiar de sección, la nueva arranca desde arriba.
+    scrollToTop(sameView);
   }
 
   function locateFromDashboard(space: SpaceRecord) {
     setLocateSpaceId(space.id);
     setView("map");
     setMobileNavOpen(false);
+    scrollToTop(false);
   }
 
   function addPhoto(photo: MaintenancePhoto, spaceId?: string, task?: MaintenanceTask) {
@@ -175,6 +180,12 @@ function AppNav({ view, onChange, role }: { view: View; onChange: (view: View) =
       {canAudit ? "Auditoria" : "Informes"}
     </button>
   </nav>;
+}
+
+function scrollToTop(smooth: boolean) {
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  // Al cambiar de sección se espera a que se dibuje la nueva vista.
+  window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: smooth && !reduceMotion ? "smooth" : "auto" }));
 }
 
 function roleLabel(role: UserProfile["role"]) {
