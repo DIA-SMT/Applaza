@@ -7,6 +7,7 @@ import {
   formatEstimatedKm,
   type EstimatedDistanceReport,
 } from "@/lib/estimated-distance";
+import { ShowMoreButton, useShowMore } from "./show-more";
 
 export function DistanceReportContent({
   report,
@@ -23,6 +24,7 @@ export function DistanceReportContent({
   const lastPeriodDay = new Date(periodYear, periodMonth, 0).getDate();
   const minimumDay = `${report.periodMonth}-01`;
   const maximumDay = `${report.periodMonth}-${String(lastPeriodDay).padStart(2, "0")}`;
+  const routePages = useShowMore(visibleReport.routes, { mobile: 5, desktop: 30, resetKey: `${report.periodMonth}|${selectedDay}` });
 
   return <>
     <div className="distance-filter-bar">
@@ -54,8 +56,8 @@ export function DistanceReportContent({
       <div><span>Personas registradas</span><strong>{visibleReport.peopleCount}</strong></div>
     </div>
 
-    {visibleReport.routes.length ? <div className="distance-route-list">
-      {visibleReport.routes.map((route) => <article key={route.id}>
+    {visibleReport.routes.length ? <><div className="distance-route-list">
+      {routePages.visible.map((route) => <article key={route.id}>
         <header>
           <div><strong>{route.userName}</strong><span>{formatDistanceDay(route.day)} · {route.stops} {route.stops === 1 ? "espacio" : "espacios"}</span></div>
           <b>{formatEstimatedKm(route.distanceKm)} km</b>
@@ -66,7 +68,7 @@ export function DistanceReportContent({
           </div>)}
         </div> : <p className="distance-single-stop">Una visita registrada, todavía sin un segundo espacio para calcular el tramo.</p>}
       </article>)}
-    </div> : <p className="dashboard-empty compact">No hay evidencias con espacios ubicados para este período.</p>}
+    </div><ShowMoreButton hidden={routePages.hidden} nextCount={routePages.nextCount} onClick={routePages.showMore} noun="jornadas" /></> : <p className="dashboard-empty compact">No hay evidencias con espacios ubicados para este período.</p>}
 
     <p className="distance-note">Distancia lineal estimada entre las ubicaciones del padrón. Varias fotos consecutivas del mismo espacio cuentan como una sola visita.</p>
   </>;

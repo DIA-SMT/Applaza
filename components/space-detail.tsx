@@ -9,6 +9,7 @@ import { photoTypeLabel } from "@/lib/photo-label";
 import { formatEvidenceDay, wasUploadedLate } from "@/lib/evidence-date";
 import { StatusBadge } from "./status-badge";
 import { PhotoUpload } from "./photo-upload";
+import { ShowMoreButton, useShowMore } from "./show-more";
 
 const typeLabel = { plaza: "Plaza", espacio_verde: "Espacio verde", platabanda: "Platabanda" };
 const fulfilledLabel = { si: "Sí", no: "No", pendiente: "Pendiente" };
@@ -20,6 +21,7 @@ export function SpaceDetail({ space, providers, currentUser, onClose, onPhoto, o
   const [name, setName] = useState(space.name); const [spaceType, setSpaceType] = useState<SpaceType>(space.type); const [address, setAddress] = useState(space.address || ""); const [neighborhood, setNeighborhood] = useState(space.neighborhood || "");
   const [providerId, setProviderId] = useState(space.provider?.id || ""); const [status, setStatus] = useState<MaintenanceStatus>(space.status); const [startDate, setStartDate] = useState(space.task?.start_date || ""); const [endDate, setEndDate] = useState(space.task?.end_date || ""); const [fulfilled, setFulfilled] = useState<Fulfilled>(space.task?.fulfilled || "pendiente"); const [observations, setObservations] = useState(space.task?.observations || "");
   const [viewerPhoto, setViewerPhoto] = useState<MaintenancePhoto>(); const [deleteConfirm, setDeleteConfirm] = useState(false); const [deleteBusy, setDeleteBusy] = useState(false); const [deleteError, setDeleteError] = useState("");
+  const photoPages = useShowMore(space.photos, { mobile: 9, desktop: 24, resetKey: space.id });
   const canDeleteViewerPhoto = Boolean(viewerPhoto && !viewerPhoto.image_url.startsWith("blob:") && (currentUser.role === "admin" || currentUser.role === "supervisor" || currentUser.role === "auditor" || viewerPhoto.uploaded_by === currentUser.id));
 
   useEffect(() => {
@@ -88,7 +90,7 @@ export function SpaceDetail({ space, providers, currentUser, onClose, onPhoto, o
         <button className="detail-expand" onClick={() => setExpanded((value) => !value)}>{expanded ? "Ocultar detalle" : "Ver detalle"}</button>
         {expanded && <div className="detail-metadata"><div><small>Identificador</small><strong>{space.id.slice(0, 8)}</strong></div><div><small>Coordenadas</small><strong>{space.latitude != null && space.longitude != null ? `${space.latitude.toFixed(5)}, ${space.longitude.toFixed(5)}` : "Sin ubicación"}</strong></div><div><small>Fuente</small><strong>{space.section_code ? `Padrón · Sección ${space.section_code}` : "Registro operativo"}</strong></div></div>}
         <section><h3>Observaciones</h3><p className="observations">{space.task?.observations || "Sin observaciones registradas."}</p></section>
-        <section><div className="section-title"><h3>Evidencias fotográficas</h3><span>{space.photos.length}</span></div>{space.photos.length ? <div className="photo-grid">{space.photos.map((photo) => <figure key={photo.id}><button className="photo-thumb" onClick={() => openViewer(photo)} aria-label={`Ver evidencia ${photoTypeLabel(photo.photo_type)} en grande`}><Image src={photo.image_url} alt={`Evidencia ${photoTypeLabel(photo.photo_type)}`} width={180} height={120} unoptimized={photo.image_url.startsWith("blob:")} /></button><figcaption>{photoTypeLabel(photo.photo_type)}</figcaption></figure>)}</div> : <p className="empty">Todavía no hay fotos asociadas.</p>}</section>
+        <section><div className="section-title"><h3>Evidencias fotográficas</h3><span>{space.photos.length}</span></div>{space.photos.length ? <><div className="photo-grid">{photoPages.visible.map((photo) => <figure key={photo.id}><button className="photo-thumb" onClick={() => openViewer(photo)} aria-label={`Ver evidencia ${photoTypeLabel(photo.photo_type)} en grande`}><Image src={photo.image_url} alt={`Evidencia ${photoTypeLabel(photo.photo_type)}`} width={180} height={120} unoptimized={photo.image_url.startsWith("blob:")} /></button><figcaption>{photoTypeLabel(photo.photo_type)}</figcaption></figure>)}</div><ShowMoreButton hidden={photoPages.hidden} nextCount={photoPages.nextCount} onClick={photoPages.showMore} noun="fotos" /></> : <p className="empty">Todavía no hay fotos asociadas.</p>}</section>
         {space.task && <PhotoUpload taskId={space.task.id} spaceName={space.name} onUploaded={onPhoto} />}
       </>}
     </div>

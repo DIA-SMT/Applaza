@@ -527,3 +527,11 @@ button:focus-visible,a:focus-visible,summary:focus-visible{outline:3px solid var
 .upload-date-field button:hover{background:var(--tint-blue)}
 .past-date-note{display:flex;gap:6px;align-items:flex-start;font-size:11px;line-height:1.4;margin:0 0 10px}
 .past-date-note svg{flex:none;margin-top:1px}
+
+/* Botón "Ver más" para listas largas */
+.show-more-button{grid-column:1/-1;width:100%;min-height:48px;margin:12px 0 4px;border:1px solid #bcd3f0;border-radius:14px;background:#fff;color:var(--brand-blue);display:grid;grid-template-columns:1fr auto;grid-template-areas:"label icon" "count icon";align-items:center;column-gap:10px;row-gap:1px;padding:8px 16px;text-align:left;box-shadow:0 2px 8px rgb(9 35 76 / 4%);transition:background .15s ease,border-color .15s ease}
+.show-more-button span{grid-area:label;font-weight:700;font-size:14px}
+.show-more-button small{grid-area:count;font-size:12px;color:var(--muted)}
+.show-more-button svg{grid-area:icon}
+.show-more-button:hover{background:var(--tint-blue);border-color:#9bc9ff}
+@media print{.show-more-button{display:none!important}}

@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight, Camera, Check, ChevronRight, ClipboardCheck, Eye, FileText, Home, Images, LayoutDashboard, LoaderCircle, LogOut, Map, MapPin, Menu, MessageSquarePlus, Route, Save, Search, Trees, TriangleAlert, UsersRound, X } from "lucide-react";
 import { CityLockup } from "./city-lockup";
 import { MascotaApplaza } from "./mascota-applaza";
+import { ShowMoreButton, useShowMore } from "./show-more";
 import type { MaintenancePhoto, MaintenanceTask, Provider, SpaceRecord, UserProfile } from "@/types/domain";
 import { buildEstimatedDistanceReport, formatEstimatedKm, type EstimatedDistanceReport } from "@/lib/estimated-distance";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
@@ -345,6 +346,9 @@ function MetricDetailPanel({
     if (metric !== "providers") setSelectedProviderId(undefined);
   }, [metric]);
 
+  const spacePages = useShowMore(filteredSpaces, { mobile: 8, desktop: 40, resetKey: `${metric}|${query}|${selectedProviderId}|${evidenceFilter}` });
+  const providerPages = useShowMore(providerRows, { mobile: 6, resetKey: metric });
+
   if (metric === "distance") return <DistanceDetailPanel report={distanceReport} onOpenMap={onOpenMap} />;
 
   return <section className="dashboard-metric-panel">
@@ -363,13 +367,13 @@ function MetricDetailPanel({
       <button className={evidenceFilter === "todos" ? "active" : ""} aria-pressed={evidenceFilter === "todos"} onClick={() => setEvidenceFilter("todos")}>Todos <b>{spaces.length}</b></button>
     </div>}
 
-    {metric === "providers" ? <div className="provider-summary-grid">
-      {providerRows.map((row) => <button key={row.provider.id} className={selectedProviderId === row.provider.id ? "active" : ""} onClick={() => setSelectedProviderId(row.provider.id)}>
+    {metric === "providers" ? <><div className="provider-summary-grid">
+      {providerPages.visible.map((row) => <button key={row.provider.id} className={selectedProviderId === row.provider.id ? "active" : ""} onClick={() => setSelectedProviderId(row.provider.id)}>
         <strong>{row.provider.name}</strong>
         <span>{row.assigned.length} espacios · {row.mapped} ubicados · {row.pending} pendientes</span>
         <small>{Math.round(row.surface).toLocaleString("es-AR")} m² · {row.photos} evidencias</small>
       </button>)}
-    </div> : null}
+    </div><ShowMoreButton hidden={providerPages.hidden} nextCount={providerPages.nextCount} onClick={providerPages.showMore} noun="cooperativas" /></> : null}
 
     {metric === "providers" && selectedProvider ? <ProviderRating provider={selectedProvider.provider} /> : null}
 
@@ -378,8 +382,8 @@ function MetricDetailPanel({
       <span>{metric === "providers" && !selectedProvider ? `${providerRows.length} cooperativas` : `${filteredSpaces.length} resultados`}</span>
     </div>
 
-    {metric === "providers" && !selectedProvider ? <p className="dashboard-empty compact">Seleccioná una cooperativa para ver sus espacios relacionados y modificar cada ficha.</p> : filteredSpaces.length ? <div className="metric-space-list">
-      {filteredSpaces.slice(0, 80).map((space) => <article key={space.id}>
+    {metric === "providers" && !selectedProvider ? <p className="dashboard-empty compact">Seleccioná una cooperativa para ver sus espacios relacionados y modificar cada ficha.</p> : filteredSpaces.length ? <><div className="metric-space-list">
+      {spacePages.visible.map((space) => <article key={space.id}>
         <div className="metric-space-main">
           <strong>{space.name}</strong>
           <span>{space.address || space.neighborhood || space.source_type || "Sin referencia"}</span>
@@ -394,7 +398,7 @@ function MetricDetailPanel({
           <button onClick={() => onSelectSpace(space)}>Ver / editar</button>
         </div>
       </article>)}
-    </div> : <p className="dashboard-empty compact">{metric === "evidence" && evidenceFilter === "sin" && !query.trim() ? "Todos los espacios tienen al menos una evidencia cargada." : "No hay registros para este filtro."}</p>}
+    </div><ShowMoreButton hidden={spacePages.hidden} nextCount={spacePages.nextCount} onClick={spacePages.showMore} noun="espacios" /></> : <p className="dashboard-empty compact">{metric === "evidence" && evidenceFilter === "sin" && !query.trim() ? "Todos los espacios tienen al menos una evidencia cargada." : "No hay registros para este filtro."}</p>}
   </section>;
 }
 
