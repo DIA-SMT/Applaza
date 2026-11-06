@@ -10,6 +10,7 @@ import { photoTypeLabel } from "@/lib/photo-label";
 import { formatEvidenceDay, wasUploadedLate } from "@/lib/evidence-date";
 import { createBrandedPdf, downloadPdfFile, drawPdfHeader, drawPdfInfoBox, fitPdfText, setPdfFont } from "@/lib/branded-pdf";
 import { DistanceReportContent, formatDistanceDay } from "./distance-report-content";
+import { ShowMoreButton, useShowMore } from "./show-more";
 
 type ControlValue = "si" | "no" | null;
 type ControlRecord = {
@@ -261,6 +262,10 @@ export function AuditDashboard({ spaces, providers, currentUser, userProfiles, o
     }
   }
 
+  // Listas por tandas en pantalla (los PDF siguen usando la lista completa).
+  const spaceListPages = useShowMore(reportView.spacesDetail, { mobile: 8, desktop: 40, resetKey: `${month}|${selectedProviderId}|${activeMetric}` });
+  const providerButtonPages = useShowMore(audit.providerRows, { mobile: 6, resetKey: month });
+
   return <div className={`content audit-page ${mode === "reports" ? "reports-page" : ""}`}>
     <section className="audit-hero">
       <div>
@@ -333,7 +338,7 @@ export function AuditDashboard({ spaces, providers, currentUser, userProfiles, o
             <EvidenceGallery spaces={reportView.spacesDetail} selectedId={selectedEvidenceSpaceId} onSelect={setSelectedEvidenceSpaceId} empty={reportView.empty} onOpenPhoto={openPhoto} />
           ) : (
             <div className="audit-space-list">
-              {reportView.spacesDetail.map((space) => <article key={space.id} className={space.hasObservation ? "observed" : space.isReviewed ? "ready" : "pending"}>
+              {spaceListPages.visible.map((space) => <article key={space.id} className={space.hasObservation ? "observed" : space.isReviewed ? "ready" : "pending"}>
                 <div>
                   <strong>{space.name}</strong>
                   <span>{space.neighborhood || "Sin barrio"} - {formatNumber(space.surface)} m2{space.photos ? ` - ${space.photos} fotos` : ""}</span>
@@ -343,6 +348,7 @@ export function AuditDashboard({ spaces, providers, currentUser, userProfiles, o
                 </div>
                 <small>{space.date ? formatDate(space.date) : "Sin registro"}</small>
               </article>)}
+              <ShowMoreButton hidden={spaceListPages.hidden} nextCount={spaceListPages.nextCount} onClick={spaceListPages.showMore} noun="espacios" />
               {!reportView.spacesDetail.length && <p className="dashboard-empty">{reportView.empty}</p>}
             </div>
           )}</>}
@@ -361,11 +367,12 @@ export function AuditDashboard({ spaces, providers, currentUser, userProfiles, o
             <span>Todas las cooperativas</span>
             <b className={audit.totalRow.statusTone}>{audit.totalRow.status}</b>
           </button>
-          {audit.providerRows.map((row) => <button key={row.provider.id} className={selectedProviderId === row.provider.id ? "active" : ""} onClick={() => setSelectedProviderId(row.provider.id)}>
+          {providerButtonPages.visible.map((row) => <button key={row.provider.id} className={selectedProviderId === row.provider.id ? "active" : ""} onClick={() => setSelectedProviderId(row.provider.id)}>
             <span>{row.provider.name}</span>
             <b className={row.statusTone}>{row.status}</b>
           </button>)}
         </div>
+        <ShowMoreButton hidden={providerButtonPages.hidden} nextCount={providerButtonPages.nextCount} onClick={providerButtonPages.showMore} noun="cooperativas" />
       </aside>
     </div>
 
@@ -438,15 +445,17 @@ function AuditStat({ icon: Icon, label, value, note, tone = "default", active, o
 
 function EvidenceGallery({ spaces, selectedId, onSelect, empty, onOpenPhoto }: { spaces: ProviderRow["spacesDetail"]; selectedId: string; onSelect: (id: string) => void; empty: string; onOpenPhoto: (photo: PhotoViewerItem, gallery?: PhotoViewerItem[]) => void }) {
   const selectedSpace = spaces.find((space) => space.id === selectedId) ?? spaces[0];
-  const photoGroups = selectedSpace ? groupPhotosByDate(selectedSpace.photoItems) : [];
   const controlGroups = selectedSpace ? groupPhotosByControl(selectedSpace.photoItems) : [];
   const selectedGallery = selectedSpace?.photoItems.map((photo) => toViewerItem(photo, selectedSpace.name, selectedSpace.providerName || "")) ?? [];
+  const cardPages = useShowMore(spaces, { mobile: 6, desktop: 24, resetKey: `${spaces.length}|${spaces[0]?.id}` });
+  const bookPages = useShowMore(selectedSpace?.photoItems ?? [], { mobile: 12, desktop: 48, resetKey: selectedSpace?.id });
+  const visiblePhotoGroups = groupPhotosByDate(bookPages.visible);
 
   if (!spaces.length) return <p className="dashboard-empty">{empty}</p>;
 
   return <div className="audit-evidence-view">
     <div className="audit-gallery-grid">
-      {spaces.map((space) => {
+      {cardPages.visible.map((space) => {
         const cover = space.photoItems[0];
         const gallery = space.photoItems.map((photo) => toViewerItem(photo, space.name, space.providerName || ""));
         const latestDate = cover?.createdAt ?? space.date;
@@ -467,6 +476,7 @@ function EvidenceGallery({ spaces, selectedId, onSelect, empty, onOpenPhoto }: {
         </article>;
       })}
     </div>
+    <ShowMoreButton hidden={cardPages.hidden} nextCount={cardPages.nextCount} onClick={cardPages.showMore} noun="espacios" />
 
     {selectedSpace && <section className="audit-photo-book">
       <div className="audit-photo-book-head">
@@ -480,7 +490,7 @@ function EvidenceGallery({ spaces, selectedId, onSelect, empty, onOpenPhoto }: {
         <div className="audit-control-photo-summary">
           {controlGroups.map((group) => <span key={group.type}><b>{group.photos.length}</b>{photoTypeLabel(group.type)}</span>)}
         </div>
-        {photoGroups.map((group) => <div key={group.date} className="audit-photo-day">
+        {visiblePhotoGroups.map((group) => <div key={group.date} className="audit-photo-day">
           <div className="audit-photo-day-title">
             <CalendarDays size={15} />
             <strong>{formatDate(group.date)}</strong>
@@ -498,6 +508,7 @@ function EvidenceGallery({ spaces, selectedId, onSelect, empty, onOpenPhoto }: {
             </figure>)}
           </div>
         </div>)}
+        <ShowMoreButton hidden={bookPages.hidden} nextCount={bookPages.nextCount} onClick={bookPages.showMore} noun="fotos" />
       </div>
     </section>}
   </div>;
@@ -508,10 +519,11 @@ function toViewerItem(photo: { id: string; url: string; type: string; createdAt:
 }
 
 function AuditObservationReview({ items, error }: { items: Array<AuditObservation & { space?: SpaceRecord }>; error: string | null }) {
+  const pages = useShowMore(items, { mobile: 6, desktop: 30, resetKey: `${items.length}|${items[0]?.id}` });
   if (error) return <p className="audit-observation-note error">{error}</p>;
 
   return <div className="audit-observation-list audit-observation-review">
-    {items.map((observation) => <article key={observation.id}>
+    {pages.visible.map((observation) => <article key={observation.id}>
       <MessageSquarePlus size={16} />
       <div>
         <strong>{observation.space?.name ?? "Espacio sin identificar"}</strong>
@@ -519,13 +531,15 @@ function AuditObservationReview({ items, error }: { items: Array<AuditObservatio
         <span>{observation.space?.provider?.name ?? "Sin cooperativa"} - {formatDate(observation.created_at)}</span>
       </div>
     </article>)}
+    <ShowMoreButton hidden={pages.hidden} nextCount={pages.nextCount} onClick={pages.showMore} noun="observaciones" />
     {!items.length && <p className="dashboard-empty">Todavia no hay observaciones cargadas para esta seleccion.</p>}
   </div>;
 }
 
 function RecentEvidenceList({ items, onOpenPhoto }: { items: Array<{ id: string; image_url: string; photo_type: string; created_at: string; uploaded_at?: string | null; spaceName: string; providerName: string; neighborhood: string }>; onOpenPhoto: (photo: PhotoViewerItem) => void }) {
+  const pages = useShowMore(items, { mobile: 12, desktop: 48, resetKey: `${items.length}|${items[0]?.id}` });
   if (!items.length) return <p className="dashboard-empty audit-evidence-empty">Todavia no hay evidencias cargadas para esta seleccion.</p>;
-  const groups = groupPhotosByDate(items.map((photo) => ({
+  const groups = groupPhotosByDate(pages.visible.map((photo) => ({
     id: photo.id,
     url: photo.image_url,
     type: photo.photo_type,
@@ -556,6 +570,7 @@ function RecentEvidenceList({ items, onOpenPhoto }: { items: Array<{ id: string;
         </figure>)}
       </div>
     </div>)}
+    <ShowMoreButton hidden={pages.hidden} nextCount={pages.nextCount} onClick={pages.showMore} noun="fotos" />
   </div>;
 }
 

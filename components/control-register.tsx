@@ -4,6 +4,7 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import { CalendarDays, Check, ClipboardCheck, FileDown, LoaderCircle, Save, Search, X } from "lucide-react";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
 import type { Provider, SpaceRecord } from "@/types/domain";
+import { ShowMoreButton, useShowMore } from "./show-more";
 
 type ControlKey = "control_1" | "control_2" | "control_3";
 type ControlValue = "si" | "no" | "";
@@ -190,6 +191,8 @@ export function ControlRegister({ providers, spaces }: { providers: Provider[]; 
   });
   const totalSurface = assignedSpaces.reduce((sum, space) => sum + (space.surface_m2 ?? 0), 0);
   const completedCells = assignedSpaces.reduce((sum, space) => sum + controlKeys.filter((key) => rows[space.id]?.[key]).length, 0);
+  // Solo la lista de celular va por tandas; la tabla de escritorio (la que se imprime) muestra todo.
+  const mobilePages = useShowMore(filteredSpaces, { mobile: 8, resetKey: `${providerId}|${period}|${query}` });
 
   useEffect(() => {
     let cancelled = false;
@@ -319,7 +322,7 @@ export function ControlRegister({ providers, spaces }: { providers: Provider[]; 
       </div>
 
       <div className="control-mobile-list">
-        {filteredSpaces.map((space) => {
+        {mobilePages.visible.map((space) => {
           const row = rows[space.id] ?? emptyRow();
           return <article className="control-mobile-card" key={space.id}>
             <div className="control-mobile-card-head"><div><strong>{space.name}</strong><span>{space.address || `Seccion ${space.section_code || "-"}`}</span></div><b>{space.surface_m2 ? `${Math.round(space.surface_m2).toLocaleString("es-AR")} mts2` : "Sin superficie"}</b></div>
@@ -331,6 +334,7 @@ export function ControlRegister({ providers, spaces }: { providers: Provider[]; 
             </div>
           </article>;
         })}
+        <ShowMoreButton hidden={mobilePages.hidden} nextCount={mobilePages.nextCount} onClick={mobilePages.showMore} noun="espacios" />
       </div>
 
       <div className="control-table-wrap">
