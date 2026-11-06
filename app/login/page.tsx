@@ -3,6 +3,10 @@
 import { useState } from "react";
 import { CheckCircle2, LoaderCircle, LockKeyhole } from "lucide-react";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
+import { OperationTimeoutError, withTimeout } from "@/lib/async-timeout";
+
+const LOGIN_TIMEOUT_MS = 20_000;
+const SESSION_CHECK_TIMEOUT_MS = 5_000;
 import { CityLockup } from "@/components/city-lockup";
 import { MascotaApplaza } from "@/components/mascota-applaza";
 
@@ -52,10 +56,10 @@ export default function LoginPage() {
     }
 
     try {
-      const { error: loginError } = await supabase.auth.signInWithPassword({
+      const { error: loginError } = await withTimeout(supabase.auth.signInWithPassword({
         email: email.trim(),
         password,
-      });
+      }), LOGIN_TIMEOUT_MS, "login");
 
       if (loginError) {
         setError(getLoginErrorMessage(loginError));
@@ -63,16 +67,23 @@ export default function LoginPage() {
         return;
       }
 
-      const { data } = await supabase.auth.getSession();
-      if (!data.session) {
-        setError("La sesion no pudo guardarse. Recarga la pagina e intenta nuevamente.");
-        setBusy(false);
-        return;
+      // Si leer la sesión se demora, se sigue igual: el servidor la valida al entrar.
+      try {
+        const { data } = await withTimeout(supabase.auth.getSession(), SESSION_CHECK_TIMEOUT_MS, "session");
+        if (!data.session) {
+          setError("La sesión no pudo guardarse. Recargá la página e intentá nuevamente.");
+          setBusy(false);
+          return;
+        }
+      } catch (sessionError) {
+        if (!(sessionError instanceof OperationTimeoutError)) throw sessionError;
       }
 
       window.location.assign("/");
-    } catch {
-      setError("No se pudo conectar con el servicio de acceso. Intenta nuevamente.");
+    } catch (loginFailure) {
+      setError(loginFailure instanceof OperationTimeoutError
+        ? "El servicio de acceso está tardando en responder. Revisá la conexión y probá de nuevo."
+        : "No se pudo conectar con el servicio de acceso. Intentá nuevamente.");
       setBusy(false);
     }
   }

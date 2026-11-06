@@ -1,6 +1,6 @@
 /* Service worker de Applaza: app instalable y tolerante a cortes de conexion.
    - Shell y estaticos: cache-first (hasheados por Next).
-   - Paginas: network-first con respaldo cacheado.
+   - Paginas: network-first con respaldo cacheado (si la red tarda mas de 6 s y hay copia).
    - Mosaicos del mapa: stale-while-revalidate con tope de entradas.
    - Fotos de evidencia: stale-while-revalidate con tope.
    - Datos de Supabase (solo GET /rest): network-first con respaldo, para
@@ -61,35 +61,49 @@ async function staleWhileRevalidate(name, request, limit) {
   return hit || refresh.then((response) => response || Response.error());
 }
 
-async function networkFirst(name, request, limit) {
-  const cache = await caches.open(name);
+// Con señal débil la red a veces no falla: queda colgada. Si pasa este tiempo y hay copia
+// guardada, se muestra la copia y la respuesta de la red sigue actualizando la caché.
+const NAVIGATION_TIMEOUT_MS = 6000;
+const DATA_TIMEOUT_MS = 8000;
+
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function networkFirstWithFallback(network, fallback, timeoutMs) {
+  network.catch(() => undefined); // si ya se respondió con la copia, un error tardío de red no queda sin manejar
   try {
-    const response = await fetch(request);
-    if (response.ok) {
-      cache.put(request, response.clone());
-      if (limit) trimCache(name, limit);
-    }
-    return response;
+    return await Promise.race([
+      network,
+      wait(timeoutMs).then(async () => (await fallback()) || network),
+    ]);
   } catch (error) {
-    const hit = await cache.match(request);
+    const hit = await fallback();
     if (hit) return hit;
     throw error;
   }
 }
 
+async function networkFirst(name, request, limit) {
+  const cache = await caches.open(name);
+  const network = fetch(request).then((response) => {
+    if (response.ok) {
+      cache.put(request, response.clone());
+      if (limit) trimCache(name, limit);
+    }
+    return response;
+  });
+  return networkFirstWithFallback(network, () => cache.match(request), DATA_TIMEOUT_MS);
+}
+
 async function pageStrategy(request) {
   const cache = await caches.open(CACHES.pages);
-  try {
-    const response = await fetch(request);
+  const network = fetch(request).then((response) => {
     if (response.ok) cache.put(request, response.clone());
     return response;
-  } catch (error) {
-    const hit = await cache.match(request);
-    if (hit) return hit;
-    const root = await cache.match(new URL("/", self.location.origin).toString());
-    if (root) return root;
-    throw error;
-  }
+  });
+  const fallback = async () => (await cache.match(request)) || (await cache.match(new URL("/", self.location.origin).toString()));
+  return networkFirstWithFallback(network, fallback, NAVIGATION_TIMEOUT_MS);
 }
 
 self.addEventListener("fetch", (event) => {
