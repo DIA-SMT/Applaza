@@ -276,7 +276,7 @@ function Dashboard({
       {shortcuts.map(({ key, label, icon: Icon, onClick }) => <button key={key} className="shortcut-tile" onClick={onClick}><Icon aria-hidden="true" /><span>{label}</span></button>)}
     </div>
     <h2 className="section-heading" id="padron">Indicadores del padrón</h2>
-    {dataError && <div className="dashboard-error"><TriangleAlert size={18} /><div><strong>No se pudieron actualizar los datos</strong><span>{dataError}</span></div></div>}
+    {dataError && <div className="dashboard-error" role="alert"><TriangleAlert size={18} /><div><strong>No se pudieron actualizar los datos</strong><span>{dataError} Puede ser la conexión o una demora del servidor.</span></div><button type="button" className="dashboard-error-retry" onClick={() => window.location.reload()}>Reintentar</button></div>}
     <div className="stats-grid">{stats.map(({ key, label, value, icon: Icon, tone }) => <button className={`stat-card ${activeMetric === key ? "active" : ""}`} key={label} onClick={() => setActiveMetric(key)}><div className={`stat-icon ${tone}`}><Icon /></div><div><span>{label}</span><strong>{value}</strong></div><ChevronRight size={16} /></button>)}</div>
     <MetricDetailPanel metric={activeMetric} spaces={spaces} providers={providers} distanceReport={distanceReport} onOpenMap={onOpenMap} onSelectSpace={(space) => setSelectedSpaceId(space.id)} onLocateSpace={onLocateSpace} />
     <div className="dashboard-grid">

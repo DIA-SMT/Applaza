@@ -497,3 +497,21 @@ button:focus-visible,a:focus-visible,summary:focus-visible{outline:3px solid var
   .mobile-menu{padding:0 12px;font-size:14px}
 }
 @media print{.welcome-hero,.quick-access,.section-heading,.shortcut-row,.bottom-nav{display:none!important}}
+
+/* Estados de conexión lenta: carga demorada, error de conexión y reintento */
+.app-loading-slow{display:grid;justify-items:center;gap:10px;margin-top:6px;max-width:300px;padding:0 16px}
+.app-loading .app-loading-slow span{font-size:13px;color:var(--muted);text-align:center}
+.app-loading-slow button,.connection-error-card button,.dashboard-error-retry{min-height:44px;border:0;border-radius:999px;background:var(--brand-blue);color:#fff;padding:0 20px;display:inline-flex;align-items:center;justify-content:center;gap:8px;font-weight:700;font-size:14px}
+.app-loading-slow button:hover,.connection-error-card button:hover,.dashboard-error-retry:hover{background:var(--brand-deep)}
+.connection-error-card button:disabled{opacity:.7}
+.connection-error{min-height:100vh;display:grid;place-items:center;padding:24px 16px;background:radial-gradient(circle at 85% 10%,rgb(45 176 255 / 18%),transparent 45%),var(--bg)}
+.connection-error.compact{min-height:60vh}
+.connection-error-card{position:relative;width:min(420px,100%);background:#fff;border:1px solid var(--line);border-top:5px solid var(--brand-yellow);border-radius:22px;padding:28px 24px;text-align:center;display:grid;justify-items:center;gap:10px;box-shadow:0 20px 50px rgb(9 35 76 / 10%)}
+.connection-error-card img{width:88px;height:auto}
+.connection-error-icon{position:absolute;top:96px;left:calc(50% + 22px);width:34px;height:34px;border-radius:50%;background:#fff3f0;color:#b42318;display:grid;place-items:center;border:2px solid #fff}
+.connection-error-card h1{font-family:var(--font-display);font-size:22px;line-height:1.2;color:var(--brand-navy);margin:8px 0 0}
+.connection-error-card p{font-size:15px;line-height:1.5;color:var(--muted);margin:0 0 8px}
+.dashboard-error>div{flex:1;min-width:0}
+.dashboard-error strong{font-size:13px}
+.dashboard-error span{font-size:12px}
+.dashboard-error-retry{flex:none;min-height:38px;padding:0 16px;font-size:13px}
