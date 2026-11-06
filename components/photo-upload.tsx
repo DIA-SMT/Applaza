@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Camera, Check, CloudOff, ImagePlus, LoaderCircle, MapPin, TriangleAlert, Upload, X } from "lucide-react";
+import { CalendarDays, Camera, Check, CloudOff, ImagePlus, LoaderCircle, MapPin, TriangleAlert, Upload, X } from "lucide-react";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
 import { withTimeout } from "@/lib/async-timeout";
+import { formatEvidenceDay, isPastEvidenceDate, isValidDateInput, pastEvidenceTimestamp, todayDateInput } from "@/lib/evidence-date";
 import { isNetworkError } from "@/lib/offline-queue";
 import { addPhotoToOutbox, countPhotoOutbox, flushPhotoOutbox, onPhotoOutboxChanged } from "@/lib/photo-outbox";
 import { PHOTO_BATCH_LIMIT, preparePhoto, runWithConcurrency, type PreparedPhoto } from "@/lib/photo-preparation";
@@ -87,6 +88,10 @@ export function PhotoUpload({
   const selectedSpace = spaceOptions.find((space) => space.id === selectedSpaceId);
   const effectiveSpaceName = spaceName ?? selectedSpace?.name;
   const [type, setType] = useState<PhotoType>("durante");
+  const today = todayDateInput();
+  // Fecha del control: por defecto hoy; se puede elegir un día anterior para cargar un control que se pasó.
+  const [evidenceDate, setEvidenceDate] = useState(today);
+  const pastDateSelected = isPastEvidenceDate(evidenceDate, today);
   const [files, setFiles] = useState<File[]>([]);
   const [readingFiles, setReadingFiles] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -178,6 +183,12 @@ export function PhotoUpload({
       setMessage({ tone: "error", text: "Selecciona un espacio verde." });
       return;
     }
+    const todayAtSubmit = todayDateInput();
+    if (!isValidDateInput(evidenceDate) || evidenceDate > todayAtSubmit) {
+      setMessage({ tone: "error", text: "Elegí una fecha válida para el control: hoy o un día anterior." });
+      return;
+    }
+    const pastDate = isPastEvidenceDate(evidenceDate, todayAtSubmit) ? evidenceDate : null;
 
     const selectedFiles = [...files];
     setBusy(true);
@@ -212,8 +223,8 @@ export function PhotoUpload({
           id: crypto.randomUUID(),
           green_space_id: selectedSpace.id,
           provider_id: selectedSpace.provider?.id ?? null,
-          start_date: today,
-          end_date: today,
+          start_date: pastDate ?? today,
+          end_date: pastDate ?? today,
           status: "programado",
           fulfilled: "pendiente",
           observations: "Registro creado para asociar evidencia fotografica.",
@@ -258,8 +269,11 @@ export function PhotoUpload({
       let queuedCount = 0;
       let originalBytes = 0;
       let outputBytes = 0;
+      let fileIndex = 0;
 
       await runWithConcurrency(selectedFiles, 1, async (file) => {
+        const createdAt = pastDate ? pastEvidenceTimestamp(pastDate, fileIndex) : undefined;
+        fileIndex += 1;
         try {
           setStage("preparing");
           setCurrentFileProgress(0);
@@ -279,6 +293,7 @@ export function PhotoUpload({
             accessToken,
             location,
             type,
+            createdAt,
             forceQueue: offline || Boolean(taskSeed),
             preferResumable: connectionAtStart === "slow" || prepared.blob.size >= RESUMABLE_UPLOAD_THRESHOLD,
             onStage: setStage,
@@ -314,8 +329,10 @@ export function PhotoUpload({
         const reduction = originalBytes > 0 ? Math.max(0, Math.round((1 - outputBytes / originalBytes) * 100)) : 0;
         setMessage({
           tone: queuedCount ? "info" : "success",
-          text: `${selectedFiles.length === 1 ? "Foto procesada." : `${selectedFiles.length} fotos procesadas.`} ${savedText}${reduction > 0 ? ` Peso reducido ${reduction}%.` : ""}`,
+          text: `${selectedFiles.length === 1 ? "Foto procesada." : `${selectedFiles.length} fotos procesadas.`} ${savedText}${pastDate ? ` Registrada${selectedFiles.length === 1 ? "" : "s"} como control del ${formatEvidenceDay(pastDate)}.` : ""}${reduction > 0 ? ` Peso reducido ${reduction}%.` : ""}`,
         });
+        // Volver a "hoy" para que la próxima carga no quede con la fecha anterior por descuido.
+        setEvidenceDate(todayDateInput());
       }
     } catch (error) {
       setMessage({ tone: "error", text: friendlyUploadError(error instanceof Error ? error.message : "No se pudieron subir las fotos.") });
@@ -344,6 +361,14 @@ export function PhotoUpload({
       <input ref={cameraInput} type="file" accept="image/*" capture="environment" onChange={(event) => void addSelectedFiles(event.target.files)} />
       <input ref={galleryInput} type="file" accept="image/*" multiple onChange={(event) => void addSelectedFiles(event.target.files)} />
     </div>
+    <div className="upload-date-field">
+      <label htmlFor={`evidence-date-${taskId ?? "general"}`}><CalendarDays size={14} />Fecha del control</label>
+      <div>
+        <input id={`evidence-date-${taskId ?? "general"}`} type="date" disabled={busy} value={evidenceDate} max={today} onChange={(event) => setEvidenceDate(event.target.value || todayDateInput())} />
+        {evidenceDate !== today && <button type="button" disabled={busy} onClick={() => setEvidenceDate(todayDateInput())}>Hoy</button>}
+      </div>
+    </div>
+    {pastDateSelected && <p className="form-message info past-date-note"><CalendarDays size={14} /><span>Se cargará como control del <strong>{formatEvidenceDay(evidenceDate)}</strong>: cuenta para ese día y ese mes en los informes.</span></p>}
     {readingFiles && <p className="form-message info"><LoaderCircle className="spin" size={14} />Leyendo las fotos del telefono...</p>}
     {files.length > 0 && <div className="upload-selected-batch">
       <Check size={15} />
@@ -375,6 +400,7 @@ async function savePreparedPhoto({
   accessToken,
   location,
   type,
+  createdAt,
   forceQueue,
   preferResumable,
   onStage,
@@ -394,6 +420,8 @@ async function savePreparedPhoto({
   accessToken: string;
   location: { latitude: number; longitude: number } | null;
   type: PhotoType;
+  /** Solo si se eligió un día anterior; si no, la base usa la hora de carga. */
+  createdAt?: string;
   forceQueue: boolean;
   preferResumable: boolean;
   onStage: (stage: UploadStage) => void;
@@ -413,6 +441,7 @@ async function savePreparedPhoto({
     uploaded_by: userId,
     latitude: location?.latitude ?? null,
     longitude: location?.longitude ?? null,
+    ...(createdAt ? { created_at: createdAt } : {}),
   };
 
   const queueIt = async () => {
@@ -428,7 +457,7 @@ async function savePreparedPhoto({
       label: `${originalFile.name} - ${effectiveSpaceName ?? "espacio verde"}`,
       queuedAt: nowIso,
     });
-    onUploaded({ ...row, image_url: URL.createObjectURL(prepared.blob), created_at: nowIso } as MaintenancePhoto, selectedSpace?.id, taskForUpload);
+    onUploaded({ ...row, image_url: URL.createObjectURL(prepared.blob), created_at: createdAt ?? nowIso, uploaded_at: nowIso } as MaintenancePhoto, selectedSpace?.id, taskForUpload);
     return "queued" as const;
   };
 

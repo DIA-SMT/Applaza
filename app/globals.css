@@ -515,3 +515,15 @@ button:focus-visible,a:focus-visible,summary:focus-visible{outline:3px solid var
 .dashboard-error strong{font-size:13px}
 .dashboard-error span{font-size:12px}
 .dashboard-error-retry{flex:none;min-height:38px;padding:0 16px;font-size:13px}
+
+/* Fecha del control en la carga de evidencias */
+.upload-date-field{display:grid;gap:6px;margin-bottom:10px}
+.upload-date-field label{display:flex;align-items:center;gap:6px;color:#52677e;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em}
+.upload-date-field label svg{color:var(--brand-blue);flex:none}
+.upload-date-field>div{display:flex;gap:8px;align-items:center}
+.upload-date-field input{flex:1;min-width:0;height:38px;border:1px solid #cfdeeb;border-radius:8px;background:#fbfdff;padding:0 10px;font-size:13px;color:#1b344f;outline:0;font-family:inherit}
+.upload-date-field input:focus{border-color:var(--brand-blue);box-shadow:0 0 0 3px #0166ff12}
+.upload-date-field button{flex:none;height:38px;border:1px solid #bcd3f0;border-radius:8px;background:#fff;color:var(--brand-blue);padding:0 12px;font-size:12px;font-weight:700}
+.upload-date-field button:hover{background:var(--tint-blue)}
+.past-date-note{display:flex;gap:6px;align-items:flex-start;font-size:11px;line-height:1.4;margin:0 0 10px}
+.past-date-note svg{flex:none;margin-top:1px}

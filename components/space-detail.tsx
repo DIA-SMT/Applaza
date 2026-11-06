@@ -6,6 +6,7 @@ import { CalendarDays, Crosshair, LoaderCircle, MapPin, Pencil, Save, Trash2, Us
 import type { Fulfilled, MaintenancePhoto, MaintenanceStatus, Provider, SpaceRecord, SpaceType, UserProfile } from "@/types/domain";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
 import { photoTypeLabel } from "@/lib/photo-label";
+import { formatEvidenceDay, wasUploadedLate } from "@/lib/evidence-date";
 import { StatusBadge } from "./status-badge";
 import { PhotoUpload } from "./photo-upload";
 
@@ -97,7 +98,7 @@ export function SpaceDetail({ space, providers, currentUser, onClose, onPhoto, o
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={viewerPhoto.image_url} alt={`${space.name} - ${photoTypeLabel(viewerPhoto.photo_type)}`} />
         <div className="photo-lightbox-bar">
-          <div><strong>{space.name}</strong><span>{photoTypeLabel(viewerPhoto.photo_type)} · {date(viewerPhoto.created_at)}{viewerPhoto.image_url.startsWith("blob:") ? " · pendiente de sincronizar" : ""}</span></div>
+          <div><strong>{space.name}</strong><span>{photoTypeLabel(viewerPhoto.photo_type)} · {date(viewerPhoto.created_at)}{wasUploadedLate(viewerPhoto) ? ` · cargada el ${formatEvidenceDay(viewerPhoto.uploaded_at!)}` : ""}{viewerPhoto.image_url.startsWith("blob:") ? " · pendiente de sincronizar" : ""}</span></div>
           <div className="photo-lightbox-actions">
             {canDeleteViewerPhoto && !deleteConfirm && <button className="photo-delete" onClick={() => setDeleteConfirm(true)}><Trash2 size={15} />Eliminar</button>}
             {canDeleteViewerPhoto && deleteConfirm && <>

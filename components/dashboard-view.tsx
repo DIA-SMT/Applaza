@@ -50,7 +50,8 @@ export function DashboardView({ initialSpaces, providers, currentUser, userProfi
     { key: "distance" as const, label: "Distancia estimada", value: `${formatEstimatedKm(distanceReport.totalKm)} km`, icon: Route, tone: "amber" },
     { key: "providers" as const, label: "Cooperativas activas", value: providers.filter((provider) => provider.active).length, icon: UsersRound, tone: "purple" },
   ];
-  const latestPhotos = spaces.flatMap((space) => space.photos.map((photo) => ({ ...photo, spaceName: space.name }))).sort((left, right) => right.created_at.localeCompare(left.created_at));
+  // Ordenadas por fecha de carga (si existe): una evidencia de un control pasado, recién cargada, aparece entre las últimas.
+  const latestPhotos = spaces.flatMap((space) => space.photos.map((photo) => ({ ...photo, spaceName: space.name }))).sort((left, right) => (right.uploaded_at ?? right.created_at).localeCompare(left.uploaded_at ?? left.created_at));
 
   useEffect(() => {
     if (!mobileNavOpen) {

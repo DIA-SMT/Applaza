@@ -7,6 +7,7 @@ import type { Provider, SpaceRecord, UserProfile } from "@/types/domain";
 import { buildEstimatedDistanceReport, filterEstimatedDistanceReport, findMostProductiveDistanceDay, formatEstimatedKm, type EstimatedDistanceReport } from "@/lib/estimated-distance";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
 import { photoTypeLabel } from "@/lib/photo-label";
+import { formatEvidenceDay, wasUploadedLate } from "@/lib/evidence-date";
 import { createBrandedPdf, downloadPdfFile, drawPdfHeader, drawPdfInfoBox, fitPdfText, setPdfFont } from "@/lib/branded-pdf";
 import { DistanceReportContent, formatDistanceDay } from "./distance-report-content";
 
@@ -37,7 +38,7 @@ type AuditObservation = {
   created_at: string;
 };
 type AuditObservationItem = AuditObservation & { space?: SpaceRecord };
-type PhotoViewerItem = { id: string; url: string; type: string; createdAt: string; title: string; subtitle: string };
+type PhotoViewerItem = { id: string; url: string; type: string; createdAt: string; uploadedAt?: string | null; title: string; subtitle: string };
 type PhotoViewerState = { items: PhotoViewerItem[]; index: number };
 const controlKeys = ["control_1", "control_2", "control_3"] as const;
 
@@ -409,7 +410,7 @@ export function AuditDashboard({ spaces, providers, currentUser, userProfiles, o
           </>}
         </div>
         <div className="photo-lightbox-bar">
-          <div><strong>{viewerPhoto.title}</strong><span>{photoTypeLabel(viewerPhoto.type)} · {formatDate(viewerPhoto.createdAt)} {formatTime(viewerPhoto.createdAt)}{viewerPhoto.subtitle ? ` · ${viewerPhoto.subtitle}` : ""}</span></div>
+          <div><strong>{viewerPhoto.title}</strong><span>{photoTypeLabel(viewerPhoto.type)} · {formatDate(viewerPhoto.createdAt)} {formatTime(viewerPhoto.createdAt)}{viewerPhoto.subtitle ? ` · ${viewerPhoto.subtitle}` : ""}{wasUploadedLate({ created_at: viewerPhoto.createdAt, uploaded_at: viewerPhoto.uploadedAt }) ? ` · cargada el ${formatEvidenceDay(viewerPhoto.uploadedAt!)}` : ""}</span></div>
           <div className="photo-lightbox-actions">
             {canDeletePhotos && !deleteConfirm && <button className="photo-delete" onClick={() => setDeleteConfirm(true)}><Trash2 size={15} />Eliminar</button>}
             {canDeletePhotos && deleteConfirm && <>
@@ -502,8 +503,8 @@ function EvidenceGallery({ spaces, selectedId, onSelect, empty, onOpenPhoto }: {
   </div>;
 }
 
-function toViewerItem(photo: { id: string; url: string; type: string; createdAt: string }, title: string, subtitle: string): PhotoViewerItem {
-  return { id: photo.id, url: photo.url, type: photo.type, createdAt: photo.createdAt, title, subtitle };
+function toViewerItem(photo: { id: string; url: string; type: string; createdAt: string; uploadedAt?: string | null }, title: string, subtitle: string): PhotoViewerItem {
+  return { id: photo.id, url: photo.url, type: photo.type, createdAt: photo.createdAt, uploadedAt: photo.uploadedAt, title, subtitle };
 }
 
 function AuditObservationReview({ items, error }: { items: Array<AuditObservation & { space?: SpaceRecord }>; error: string | null }) {
@@ -522,13 +523,14 @@ function AuditObservationReview({ items, error }: { items: Array<AuditObservatio
   </div>;
 }
 
-function RecentEvidenceList({ items, onOpenPhoto }: { items: Array<{ id: string; image_url: string; photo_type: string; created_at: string; spaceName: string; providerName: string; neighborhood: string }>; onOpenPhoto: (photo: PhotoViewerItem) => void }) {
+function RecentEvidenceList({ items, onOpenPhoto }: { items: Array<{ id: string; image_url: string; photo_type: string; created_at: string; uploaded_at?: string | null; spaceName: string; providerName: string; neighborhood: string }>; onOpenPhoto: (photo: PhotoViewerItem) => void }) {
   if (!items.length) return <p className="dashboard-empty audit-evidence-empty">Todavia no hay evidencias cargadas para esta seleccion.</p>;
   const groups = groupPhotosByDate(items.map((photo) => ({
     id: photo.id,
     url: photo.image_url,
     type: photo.photo_type,
     createdAt: photo.created_at,
+    uploadedAt: photo.uploaded_at,
     spaceName: photo.spaceName,
     providerName: photo.providerName,
     neighborhood: photo.neighborhood,
@@ -543,7 +545,7 @@ function RecentEvidenceList({ items, onOpenPhoto }: { items: Array<{ id: string;
       </div>
       <div className="audit-recent-evidence-grid">
         {group.photos.map((photo) => <figure key={photo.id}>
-          <button className="photo-thumb" onClick={() => onOpenPhoto({ id: photo.id, url: photo.url, type: photo.type, createdAt: photo.createdAt, title: photo.spaceName, subtitle: photo.providerName })} aria-label={`Ver foto de ${photo.spaceName} en grande`}>
+          <button className="photo-thumb" onClick={() => onOpenPhoto({ id: photo.id, url: photo.url, type: photo.type, createdAt: photo.createdAt, uploadedAt: photo.uploadedAt, title: photo.spaceName, subtitle: photo.providerName })} aria-label={`Ver foto de ${photo.spaceName} en grande`}>
             <img src={photo.url} alt={photo.spaceName} />
           </button>
           <figcaption>
@@ -642,6 +644,7 @@ function buildProviderRow(provider: Provider, assignedSpaces: SpaceRecord[], pro
         url: photo.image_url,
         type: photo.photo_type,
         createdAt: photo.created_at,
+        uploadedAt: photo.uploaded_at,
       })),
       providerName: space.provider?.name ?? (provider.id === "all" ? "Sin cooperativa" : provider.name),
       controlDates,
