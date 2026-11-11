@@ -6,7 +6,7 @@ type ServiceSection = { section_code: string; provider_id: string };
 export async function getDashboardData(authenticatedClient?: SupabaseClient): Promise<{ spaces: SpaceRecord[]; providers: Provider[]; error: string | null }> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !key) return { spaces: [], providers: [], error: "Supabase no está configurado." };
+  if (!url || !key) return { spaces: [], providers: [], error: "El servicio de datos no está disponible." };
 
   try {
     const supabase = authenticatedClient ?? createClient(url, key, { auth: { persistSession: false } });
@@ -56,7 +56,7 @@ export async function getDashboardData(authenticatedClient?: SupabaseClient): Pr
     return { spaces, providers, error: null };
   } catch (error) {
     console.error("Supabase dashboard error:", error);
-    return { spaces: [], providers: [], error: "No se pudieron cargar los datos operativos desde Supabase." };
+    return { spaces: [], providers: [], error: "No se pudieron cargar los datos operativos." };
   }
 }
 

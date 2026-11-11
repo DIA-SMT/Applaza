@@ -50,7 +50,7 @@ export default function LoginPage() {
 
     const supabase = getSupabaseBrowserClient();
     if (!supabase) {
-      setError("Supabase no esta configurado.");
+      setError("El servicio de acceso no está disponible. Intentá de nuevo en unos minutos.");
       setBusy(false);
       return;
     }

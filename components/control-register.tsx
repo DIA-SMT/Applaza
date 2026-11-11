@@ -3,6 +3,7 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { CalendarDays, Check, ClipboardCheck, FileDown, LoaderCircle, Save, Search, X } from "lucide-react";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
+import { MSG_SERVICE_UNAVAILABLE, userErrorMessage } from "@/lib/user-messages";
 import type { Provider, SpaceRecord } from "@/types/domain";
 import { ShowMoreButton, useShowMore } from "./show-more";
 
@@ -202,7 +203,7 @@ export function ControlRegister({ providers, spaces }: { providers: Provider[]; 
       if (!providerId || !period) return;
       const client = getSupabaseBrowserClient();
       if (!client) {
-        setMessage("Supabase no esta configurado. No se pueden recuperar registros.");
+        setMessage(MSG_SERVICE_UNAVAILABLE);
         return;
       }
 
@@ -226,7 +227,7 @@ export function ControlRegister({ providers, spaces }: { providers: Provider[]; 
           control_3_date: record.control_3_date ?? "",
         } satisfies RowState])));
       } catch (error) {
-        if (!cancelled) setMessage(error instanceof Error ? `No se pudieron recuperar registros previos: ${error.message}` : "No se pudieron recuperar registros previos.");
+        if (!cancelled) setMessage(userErrorMessage(error, "No se pudieron recuperar los registros guardados. Intentá de nuevo."));
       } finally {
         if (!cancelled) setLoadingRecords(false);
       }
@@ -260,7 +261,7 @@ export function ControlRegister({ providers, spaces }: { providers: Provider[]; 
 
     try {
       const client = getSupabaseBrowserClient();
-      if (!client) throw new Error("Supabase no esta configurado. No se puede guardar el registro.");
+      if (!client) throw new Error(MSG_SERVICE_UNAVAILABLE);
 
       const { data: { user } } = await client.auth.getUser();
       if (!user) throw new Error("Inicia sesion para guardar el registro.");
@@ -286,7 +287,7 @@ export function ControlRegister({ providers, spaces }: { providers: Provider[]; 
       setMessage("Registro de control guardado.");
       setSaveState("success");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "No se pudo guardar el registro.");
+      setMessage(userErrorMessage(error, "No se pudo guardar el registro. Intentá de nuevo."));
       setSaveState("error");
     } finally {
       setSaving(false);
@@ -357,7 +358,7 @@ export function ControlRegister({ providers, spaces }: { providers: Provider[]; 
               </tr>;
             })}
           </tbody>
-          <tfoot><tr><td>Total</td><td>{Math.round(totalSurface).toLocaleString("es-AR")}</td><td colSpan={9}>Los registros se guardan en Supabase.</td></tr></tfoot>
+          <tfoot><tr><td>Total</td><td>{Math.round(totalSurface).toLocaleString("es-AR")}</td><td colSpan={9}></td></tr></tfoot>
         </table>
       </div>
 

@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { Check, LoaderCircle, X } from "lucide-react";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
+import { MSG_SERVICE_UNAVAILABLE, userErrorMessage } from "@/lib/user-messages";
 import type { Provider } from "@/types/domain";
 
 const monthLabel = new Intl.DateTimeFormat("es-AR", { month: "long", year: "numeric" });
@@ -12,7 +13,7 @@ function currentPeriod() {
 }
 
 function friendlyError(message: string) {
-  return /relation .* does not exist|schema cache/i.test(message) ? "Falta ejecutar supabase/provider_ratings.sql en Supabase para habilitar las calificaciones." : message;
+  return /relation .* does not exist|schema cache/i.test(message) ? "Las calificaciones todavía no están habilitadas. Avisá a DIA." : userErrorMessage(message, "No se pudo completar la operación. Intentá de nuevo.");
 }
 
 export function ProviderRating({ provider }: { provider: Provider }) {
@@ -28,7 +29,7 @@ export function ProviderRating({ provider }: { provider: Provider }) {
     let active = true;
     setLoading(true); setMessage(""); setError(""); setFulfilled(null); setObservations("");
     const client = getSupabaseBrowserClient();
-    if (!client) { setLoading(false); setError("Supabase no está configurado."); return; }
+    if (!client) { setLoading(false); setError(MSG_SERVICE_UNAVAILABLE); return; }
     void client.from("provider_ratings").select("fulfilled,observations").eq("provider_id", provider.id).eq("period_month", period).maybeSingle().then(({ data, error: loadError }) => {
       if (!active) return;
       if (loadError) setError(friendlyError(loadError.message));
@@ -42,7 +43,7 @@ export function ProviderRating({ provider }: { provider: Provider }) {
     if (!fulfilled) return;
     setBusy(true); setMessage(""); setError("");
     const client = getSupabaseBrowserClient();
-    if (!client) { setError("Supabase no está configurado."); setBusy(false); return; }
+    if (!client) { setError(MSG_SERVICE_UNAVAILABLE); setBusy(false); return; }
     const { data: { session } } = await client.auth.getSession();
     if (!session) { setError("Iniciá sesión para calificar."); setBusy(false); return; }
     const { error: saveError } = await client.from("provider_ratings").upsert({ provider_id: provider.id, period_month: period, fulfilled, observations: observations.trim(), rated_by: session.user.id }, { onConflict: "provider_id,period_month" });

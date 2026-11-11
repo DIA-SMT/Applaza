@@ -5,6 +5,7 @@ import Image from "next/image";
 import { CalendarDays, Crosshair, LoaderCircle, MapPin, Pencil, Save, Trash2, UserRound, X } from "lucide-react";
 import type { Fulfilled, MaintenancePhoto, MaintenanceStatus, Provider, SpaceRecord, SpaceType, UserProfile } from "@/types/domain";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
+import { MSG_SERVICE_UNAVAILABLE, userErrorMessage } from "@/lib/user-messages";
 import { photoTypeLabel } from "@/lib/photo-label";
 import { formatEvidenceDay, wasUploadedLate } from "@/lib/evidence-date";
 import { StatusBadge } from "./status-badge";
@@ -38,9 +39,9 @@ export function SpaceDetail({ space, providers, currentUser, onClose, onPhoto, o
     if (!viewerPhoto) return;
     setDeleteBusy(true); setDeleteError("");
     const supabase = getSupabaseBrowserClient();
-    if (!supabase) { setDeleteError("Supabase no está configurado."); setDeleteBusy(false); return; }
+    if (!supabase) { setDeleteError(MSG_SERVICE_UNAVAILABLE); setDeleteBusy(false); return; }
     const { error: deleteRowError } = await supabase.from("maintenance_photos").delete().eq("id", viewerPhoto.id);
-    if (deleteRowError) { setDeleteError(/policy|permission|denied|row-level/i.test(deleteRowError.message) ? "La base todavía no permite borrar evidencias: hay que ejecutar supabase/staff_delete_photos.sql en Supabase." : deleteRowError.message); setDeleteBusy(false); return; }
+    if (deleteRowError) { setDeleteError(userErrorMessage(deleteRowError, "No se pudo borrar la evidencia. Intentá de nuevo.")); setDeleteBusy(false); return; }
     const marker = "/maintenance-photos/";
     const markerIndex = viewerPhoto.image_url.indexOf(marker);
     if (markerIndex >= 0) { const storagePath = decodeURIComponent(viewerPhoto.image_url.slice(markerIndex + marker.length).split("?")[0]); await supabase.storage.from("maintenance-photos").remove([storagePath]); }
@@ -55,10 +56,10 @@ export function SpaceDetail({ space, providers, currentUser, onClose, onPhoto, o
     const supabase = getSupabaseBrowserClient(); if (!supabase) { setError("Supabase no está configurado."); return; }
     setSaving(true); setError("");
     const { error: spaceError } = await supabase.from("green_spaces").update({ name: name.trim(), type: spaceType, address: address.trim(), neighborhood: neighborhood.trim(), status }).eq("id", space.id);
-    if (spaceError) { setError(spaceError.message); setSaving(false); return; }
+    if (spaceError) { setError(userErrorMessage(spaceError, "No se pudieron guardar los cambios. Intentá de nuevo.")); setSaving(false); return; }
     if (space.task) {
       const { error: taskError } = await supabase.from("maintenance_tasks").update({ provider_id: providerId || null, start_date: startDate, end_date: endDate, status, fulfilled, observations: observations.trim() }).eq("id", space.task.id);
-      if (taskError) { setError(taskError.message); setSaving(false); return; }
+      if (taskError) { setError(userErrorMessage(taskError, "No se pudieron guardar los cambios. Intentá de nuevo.")); setSaving(false); return; }
     }
     const provider = providers.find((item) => item.id === providerId);
     onUpdate({ ...space, name: name.trim(), type: spaceType, address: address.trim(), neighborhood: neighborhood.trim(), status, provider, task: space.task ? { ...space.task, provider_id: providerId, start_date: startDate, end_date: endDate, status, fulfilled, observations: observations.trim() } : undefined });
@@ -69,7 +70,7 @@ export function SpaceDetail({ space, providers, currentUser, onClose, onPhoto, o
     <div className="detail-cover"><button className="icon-button close" onClick={onClose} aria-label="Cerrar"><X size={20} /></button><div className="cover-label">{space.source_type || typeLabel[space.type]}</div><h2>{space.name}</h2><StatusBadge status={space.status} />{canEdit && !editing && <button className="detail-edit-trigger" onClick={beginEdit}><Pencil size={14} />Editar información</button>}</div>
     <div className="detail-scroll">
       {editing ? <div className="detail-edit-form">
-        <div className="detail-form-heading"><div><strong>Editar ficha operativa</strong><span>Los cambios se guardan en Supabase.</span></div><button onClick={() => setEditing(false)}><X size={16} /></button></div>
+        <div className="detail-form-heading"><div><strong>Editar ficha operativa</strong><span>Revisá los datos antes de guardar.</span></div><button onClick={() => setEditing(false)}><X size={16} /></button></div>
         <label>Nombre<input value={name} onChange={(event) => setName(event.target.value)} /></label>
         <div className="detail-form-grid"><label>Tipo<select value={spaceType} onChange={(event) => setSpaceType(event.target.value as SpaceType)}><option value="plaza">Plaza</option><option value="espacio_verde">Espacio verde</option><option value="platabanda">Platabanda</option></select></label><label>Estado<select value={status} onChange={(event) => setStatus(event.target.value as MaintenanceStatus)}><option value="programado">Programado</option><option value="en_curso">En curso</option><option value="finalizado">Finalizado</option><option value="vencido">Vencido</option><option value="observado">Observado</option><option value="incumplido">Incumplido</option></select></label></div>
         <label>Dirección o referencia<input value={address} onChange={(event) => setAddress(event.target.value)} /><small>Cambiar este texto no mueve el punto del mapa.</small></label>

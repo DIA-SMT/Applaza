@@ -10,6 +10,7 @@ import { LocationEditor } from "./location-editor";
 import { RelocationEditor } from "./relocation-editor";
 import { QuickAddEditor } from "./quick-add-editor";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
+import { MSG_SERVICE_UNAVAILABLE, userErrorMessage } from "@/lib/user-messages";
 import { isNetworkError, loadQueue, persistQueue, runPendingOp, type PendingOp } from "@/lib/offline-queue";
 import { countPhotoOutbox, flushPhotoOutbox, onPhotoOutboxChanged } from "@/lib/photo-outbox";
 
@@ -144,7 +145,7 @@ export function OperationalMap({ spaces, providers, currentUser, dataError, setS
     if (!pendingSpace || !draftPoints.length) return;
     setLocationBusy(true); setLocationError("");
     const supabase = getSupabaseBrowserClient();
-    if (!supabase) { setLocationError("Supabase no está configurado."); setLocationBusy(false); return; }
+    if (!supabase) { setLocationError(MSG_SERVICE_UNAVAILABLE); setLocationBusy(false); return; }
     const primary = draftPoints[0];
     const path = spaceLayerId(pendingSpace) === "platabanda" && draftPoints.length >= 2 ? draftPoints : null;
     const values = { latitude: primary.latitude, longitude: primary.longitude, path, geocoding_source: "Manual Applaza", geocoded_at: new Date().toISOString() };
@@ -152,14 +153,14 @@ export function OperationalMap({ spaces, providers, currentUser, dataError, setS
     const queueIt = () => { enqueueOp({ kind: "update", match: pendingSpace.id, values, label: `Ubicación de ${pendingSpace.name}` }); applyLocal(); };
     if (!navigator.onLine) { queueIt(); return; }
     const { error } = await supabase.from("green_spaces").update(values).eq("id", pendingSpace.id);
-    if (error) { if (isNetworkError(error.message)) { queueIt(); return; } setLocationError(error.message); setLocationBusy(false); return; }
+    if (error) { if (isNetworkError(error.message)) { queueIt(); return; } setLocationError(userErrorMessage(error, "No se pudo guardar la ubicación. Intentá de nuevo.")); setLocationBusy(false); return; }
     applyLocal();
   }
   async function saveRelocation() {
     if (!relocatingSpace || !draftPoints.length) return;
     setLocationBusy(true); setLocationError("");
     const supabase = getSupabaseBrowserClient();
-    if (!supabase) { setLocationError("Supabase no está configurado."); setLocationBusy(false); return; }
+    if (!supabase) { setLocationError(MSG_SERVICE_UNAVAILABLE); setLocationBusy(false); return; }
     const primary = draftPoints[0];
     const path = spaceLayerId(relocatingSpace) === "platabanda" && draftPoints.length >= 2 ? draftPoints : null;
     const values = { latitude: primary.latitude, longitude: primary.longitude, path, geocoding_source: "Corrección manual Applaza", geocoded_at: new Date().toISOString() };
@@ -167,7 +168,7 @@ export function OperationalMap({ spaces, providers, currentUser, dataError, setS
     const queueIt = () => { enqueueOp({ kind: "update", match: relocatingSpace.id, values, label: `Reubicación de ${relocatingSpace.name}` }); applyLocal(); };
     if (!navigator.onLine) { queueIt(); return; }
     const { error } = await supabase.from("green_spaces").update(values).eq("id", relocatingSpace.id);
-    if (error) { if (isNetworkError(error.message)) { queueIt(); return; } setLocationError(error.message); setLocationBusy(false); return; }
+    if (error) { if (isNetworkError(error.message)) { queueIt(); return; } setLocationError(userErrorMessage(error, "No se pudo guardar la ubicación. Intentá de nuevo.")); setLocationBusy(false); return; }
     applyLocal();
   }
   function beginRelocation(space: SpaceRecord) { setLocationMode(false); setRelocatingId(space.id); setSelectedId(undefined); setDraftPoints((space.path?.length ?? 0) >= 2 ? space.path!.slice(0, 3) : space.latitude != null && space.longitude != null ? [{ latitude: space.latitude, longitude: space.longitude }] : []); setDraftFromGps(false); setLocationError(""); }
@@ -177,7 +178,7 @@ export function OperationalMap({ spaces, providers, currentUser, dataError, setS
     if (!userLocation) return;
     setQuickAddBusy(true); setQuickAddError("");
     const supabase = getSupabaseBrowserClient();
-    if (!supabase) { setQuickAddError("Supabase no está configurado."); setQuickAddBusy(false); return; }
+    if (!supabase) { setQuickAddError(MSG_SERVICE_UNAVAILABLE); setQuickAddBusy(false); return; }
     const sourceTypeLabels: Record<SpaceType, string> = { plaza: "Plaza", espacio_verde: "Espacio verde", platabanda: "Platabanda" };
     const nowIso = new Date().toISOString();
     const record = { id: crypto.randomUUID(), name: input.name, type: input.type, address: input.address || null, neighborhood: input.neighborhood || null, latitude: userLocation.latitude, longitude: userLocation.longitude, source_type: sourceTypeLabels[input.type], source_document: "Alta manual Applaza", source_key: `applaza-${crypto.randomUUID()}`, geocoding_source: "GPS Applaza", geocoded_at: nowIso };
@@ -186,21 +187,21 @@ export function OperationalMap({ spaces, providers, currentUser, dataError, setS
     const queueIt = () => { enqueueOp({ kind: "insert", values: record, label: `Alta de ${record.name}` }); applyLocal(); };
     if (!navigator.onLine) { queueIt(); return; }
     const { error } = await supabase.from("green_spaces").insert(record);
-    if (error) { if (isNetworkError(error.message)) { queueIt(); return; } setQuickAddError(/policy|permission|denied/i.test(error.message) ? "La base todavía no permite altas desde la app: hay que ejecutar supabase/staff_insert_spaces.sql en Supabase." : error.message); setQuickAddBusy(false); return; }
+    if (error) { if (isNetworkError(error.message)) { queueIt(); return; } setQuickAddError(userErrorMessage(error, "No se pudo agregar el espacio. Intentá de nuevo.")); setQuickAddBusy(false); return; }
     applyLocal();
   }
   async function linkQuickAdd(space: SpaceRecord) {
     if (!userLocation) return;
     setQuickAddBusy(true); setQuickAddError("");
     const supabase = getSupabaseBrowserClient();
-    if (!supabase) { setQuickAddError("Supabase no está configurado."); setQuickAddBusy(false); return; }
+    if (!supabase) { setQuickAddError(MSG_SERVICE_UNAVAILABLE); setQuickAddBusy(false); return; }
     const { latitude, longitude } = userLocation;
     const values = { latitude, longitude, geocoding_source: "GPS Applaza", geocoded_at: new Date().toISOString() };
     const applyLocal = () => { setSpaces((current) => current.map((item) => item.id === space.id ? { ...item, latitude, longitude } : item)); setQuickAddBusy(false); setQuickAddOpen(false); setSelectedId(space.id); };
     const queueIt = () => { enqueueOp({ kind: "update", match: space.id, values, label: `Ubicación de ${space.name}` }); applyLocal(); };
     if (!navigator.onLine) { queueIt(); return; }
     const { error } = await supabase.from("green_spaces").update(values).eq("id", space.id);
-    if (error) { if (isNetworkError(error.message)) { queueIt(); return; } setQuickAddError(error.message); setQuickAddBusy(false); return; }
+    if (error) { if (isNetworkError(error.message)) { queueIt(); return; } setQuickAddError(userErrorMessage(error, "No se pudo guardar el espacio. Intentá de nuevo.")); setQuickAddBusy(false); return; }
     applyLocal();
   }
   async function locateUser(assignDraft: boolean, onLocated?: () => void) {
@@ -251,7 +252,7 @@ export function OperationalMap({ spaces, providers, currentUser, dataError, setS
       {syncQueue.length + pendingPhotos > 0 && <div className="gis-sync-banner"><CloudOff size={14} /><span>{syncQueue.length + pendingPhotos === 1 ? "1 cambio sin sincronizar" : `${syncQueue.length + pendingPhotos} cambios sin sincronizar`}</span><button onClick={() => void syncNow()} disabled={syncBusy}>{syncBusy ? <LoaderCircle size={13} className="spin" /> : <RefreshCw size={13} />}Sincronizar ahora</button></div>}
       {syncNotice && <div className="gis-geo-toast" onClick={() => setSyncNotice("")}>{syncNotice}</div>}
 
-      {dataError ? <div className="gis-state gis-error"><TriangleIcon /><strong>No pudimos cargar el mapa operativo</strong><span>{dataError}</span></div> : spaces.length === 0 ? <div className="gis-state"><Trees /><strong>Todavía no hay espacios verdes cargados</strong><span>Los registros aparecerán aquí cuando estén disponibles en Supabase.</span></div> : filteredSpaces.length === 0 ? <div className="gis-state"><Filter /><strong>No hay resultados para los filtros seleccionados</strong><button onClick={clearFilters}>Restablecer filtros</button></div> : mappedSpaces.length === 0 ? <div className="gis-state"><MapPin /><strong>Los resultados no tienen ubicación</strong><span>Podés asignarla desde el editor manual.</span></div> : null}
+      {dataError ? <div className="gis-state gis-error"><TriangleIcon /><strong>No pudimos cargar el mapa operativo</strong><span>{dataError}</span></div> : spaces.length === 0 ? <div className="gis-state"><Trees /><strong>Todavía no hay espacios verdes cargados</strong><span>Los espacios aparecerán aquí cuando estén cargados.</span></div> : filteredSpaces.length === 0 ? <div className="gis-state"><Filter /><strong>No hay resultados para los filtros seleccionados</strong><button onClick={clearFilters}>Restablecer filtros</button></div> : mappedSpaces.length === 0 ? <div className="gis-state"><MapPin /><strong>Los resultados no tienen ubicación</strong><span>Podés asignarla desde el editor manual.</span></div> : null}
 
       {quickAddOpen && userLocation ? <QuickAddEditor location={userLocation} pendingSpaces={pendingSpaces} busy={quickAddBusy} error={quickAddError} onSave={saveQuickAdd} onLink={linkQuickAdd} onClose={() => setQuickAddOpen(false)} /> : relocatingSpace ? <RelocationEditor space={relocatingSpace} points={draftPoints} isLinear={targetIsLinear} busy={locationBusy} error={locationError} geoBusy={geoBusy} geoError={geoError} warning={gpsWarning} onUseMyLocation={() => locateUser(true)} onRemovePoint={removeDraftPoint} onReorderPoint={reorderDraftPoint} onSave={saveRelocation} onClose={() => { setRelocatingId(undefined); setDraftPoints([]); setLocationError(""); }} /> : locationMode && pendingSpace ? <LocationEditor space={pendingSpace} index={pendingIndex} total={pendingSpaces.length} pendingSpaces={pendingSpaces} suggestions={nearbySuggestions} points={draftPoints} isLinear={targetIsLinear} busy={locationBusy} error={locationError} geoBusy={geoBusy} geoError={geoError} warning={gpsWarning} onPrevious={() => movePending(-1)} onNext={() => movePending(1)} onSelectSpace={selectPendingSpace} onAddGpsPoint={() => locateUser(true)} onRemovePoint={removeDraftPoint} onReorderPoint={reorderDraftPoint} onUseMyLocation={() => locateUser(false, () => { setLocationMode(false); setDraftPoints([]); setQuickAddError(""); setQuickAddOpen(true); })} onSave={saveLocation} onClose={() => setLocationMode(false)} /> : selected && <SpaceDetail space={selected} providers={providers} currentUser={currentUser} onClose={() => setSelectedId(undefined)} onPhoto={addPhoto} onUpdate={(updated) => setSpaces((current) => current.map((space) => space.id === updated.id ? updated : space))} onRelocate={beginRelocation} />}
     </div>

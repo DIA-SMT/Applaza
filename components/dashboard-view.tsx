@@ -9,6 +9,7 @@ import { ShowMoreButton, useShowMore } from "./show-more";
 import type { MaintenancePhoto, MaintenanceTask, Provider, SpaceRecord, UserProfile } from "@/types/domain";
 import { buildEstimatedDistanceReport, formatEstimatedKm, type EstimatedDistanceReport } from "@/lib/estimated-distance";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
+import { MSG_SERVICE_UNAVAILABLE } from "@/lib/user-messages";
 import { photoTypeLabel } from "@/lib/photo-label";
 import { AuditDashboard } from "./audit-dashboard";
 import { AssistantChat } from "./assistant-chat";
@@ -473,7 +474,7 @@ function SupervisorObservations({ spaces, currentUser }: { spaces: SpaceRecord[]
       if (!active) return;
       if (queryError) {
         setItems([]);
-        setError("Para guardar observaciones ejecuta el SQL de audit_observations.");
+        setError("Las observaciones todavía no están habilitadas. Avisá a DIA.");
       } else {
         setItems((data ?? []) as SupervisorObservation[]);
       }
@@ -494,7 +495,7 @@ function SupervisorObservations({ spaces, currentUser }: { spaces: SpaceRecord[]
 
     const supabase = getSupabaseBrowserClient();
     if (!supabase) {
-      setMessage("Supabase no esta configurado.");
+      setMessage(MSG_SERVICE_UNAVAILABLE);
       return;
     }
 
@@ -510,7 +511,7 @@ function SupervisorObservations({ spaces, currentUser }: { spaces: SpaceRecord[]
     setSaving(false);
 
     if (insertError) {
-      setMessage("No se pudo guardar la observacion. Revisa si ejecutaste el SQL.");
+      setMessage("No se pudo guardar la observación. Intentá de nuevo; si sigue, avisá a DIA.");
       return;
     }
 

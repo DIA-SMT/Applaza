@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CalendarDays, Camera, Check, CloudOff, ImagePlus, LoaderCircle, MapPin, TriangleAlert, Upload, X } from "lucide-react";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
+import { MSG_SERVICE_UNAVAILABLE, userErrorMessage } from "@/lib/user-messages";
 import { withTimeout } from "@/lib/async-timeout";
 import { formatEvidenceDay, isPastEvidenceDate, isValidDateInput, pastEvidenceTimestamp, todayDateInput } from "@/lib/evidence-date";
 import { isNetworkError } from "@/lib/offline-queue";
@@ -199,7 +200,7 @@ export function PhotoUpload({
 
     try {
       const client = getSupabaseBrowserClient();
-      if (!client) throw new Error("Supabase no esta configurado. No se puede guardar evidencia sin base de datos.");
+      if (!client) throw new Error(MSG_SERVICE_UNAVAILABLE);
 
       const [{ data: { session } }, location] = await Promise.all([
         client.auth.getSession(),
@@ -305,7 +306,7 @@ export function PhotoUpload({
           else uploadedCount += 1;
         } catch (error) {
           failedFiles.push(file);
-          errors.push(friendlyUploadError(error instanceof Error ? error.message : `No se pudo subir ${file.name}.`));
+          errors.push(friendlyUploadError(userErrorMessage(error, `No se pudo subir ${file.name}.`)));
         } finally {
           setProgress((current) => ({ ...current, completed: current.completed + 1 }));
           setCurrentFileProgress(0);
@@ -335,7 +336,7 @@ export function PhotoUpload({
         setEvidenceDate(todayDateInput());
       }
     } catch (error) {
-      setMessage({ tone: "error", text: friendlyUploadError(error instanceof Error ? error.message : "No se pudieron subir las fotos.") });
+      setMessage({ tone: "error", text: friendlyUploadError(userErrorMessage(error, "No se pudieron subir las fotos. Intentá de nuevo.")) });
     } finally {
       setBusy(false);
       setStage("idle");

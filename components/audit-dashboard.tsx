@@ -6,6 +6,7 @@ import { AlertCircle, CalendarDays, Camera, CheckCircle2, ChevronLeft, ChevronRi
 import type { Provider, SpaceRecord, UserProfile } from "@/types/domain";
 import { buildEstimatedDistanceReport, filterEstimatedDistanceReport, findMostProductiveDistanceDay, formatEstimatedKm, type EstimatedDistanceReport } from "@/lib/estimated-distance";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
+import { MSG_SERVICE_UNAVAILABLE, userErrorMessage } from "@/lib/user-messages";
 import { photoTypeLabel } from "@/lib/photo-label";
 import { formatEvidenceDay, wasUploadedLate } from "@/lib/evidence-date";
 import { createBrandedPdf, downloadPdfFile, drawPdfHeader, drawPdfInfoBox, fitPdfText, setPdfFont } from "@/lib/branded-pdf";
@@ -71,7 +72,7 @@ export function AuditDashboard({ spaces, providers, currentUser, userProfiles, o
       const supabase = getSupabaseBrowserClient();
       if (!supabase) {
         setRecords([]);
-        setError("Supabase no esta configurado.");
+        setError(MSG_SERVICE_UNAVAILABLE);
         setLoading(false);
         return;
       }
@@ -115,7 +116,7 @@ export function AuditDashboard({ spaces, providers, currentUser, userProfiles, o
       if (!active) return;
       if (queryError) {
         setObservations([]);
-        setObservationsError("Para ver observaciones ejecuta el SQL de audit_observations.");
+        setObservationsError("Las observaciones todavía no están habilitadas. Avisá a DIA.");
       } else {
         setObservations((data ?? []) as AuditObservation[]);
       }
@@ -203,10 +204,10 @@ export function AuditDashboard({ spaces, providers, currentUser, userProfiles, o
     setDeleteBusy(true);
     setDeleteError("");
     const supabase = getSupabaseBrowserClient();
-    if (!supabase) { setDeleteError("Supabase no esta configurado."); setDeleteBusy(false); return; }
+    if (!supabase) { setDeleteError(MSG_SERVICE_UNAVAILABLE); setDeleteBusy(false); return; }
     const { error: deleteRowError } = await supabase.from("maintenance_photos").delete().eq("id", viewerPhoto.id);
     if (deleteRowError) {
-      setDeleteError(/policy|permission|denied|row-level/i.test(deleteRowError.message) ? "La base todavia no permite borrar evidencias: hay que ejecutar supabase/staff_delete_photos.sql en Supabase." : deleteRowError.message);
+      setDeleteError(userErrorMessage(deleteRowError, "No se pudo borrar la evidencia. Intentá de nuevo."));
       setDeleteBusy(false);
       return;
     }
