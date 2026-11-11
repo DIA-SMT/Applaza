@@ -15,6 +15,16 @@ const CACHES = {
   images: `${VERSION}-images`,
   data: `${VERSION}-data`,
 };
+// Dominio de la API de Supabase: lo pasa la app al registrar el service worker (/sw.js?api=...).
+// Sirve tanto para Supabase Cloud (*.supabase.co) como para el Supabase propio.
+const API_HOST = (() => {
+  try { return new URL(new URL(self.location.href).searchParams.get("api")).hostname; } catch { return null; }
+})();
+
+function isSupabaseHost(hostname) {
+  return hostname.endsWith(".supabase.co") || (API_HOST !== null && hostname === API_HOST);
+}
+
 const TILE_LIMIT = 600;
 const IMAGE_LIMIT = 150;
 const DATA_LIMIT = 60;
@@ -127,7 +137,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  if (url.hostname.endsWith(".supabase.co")) {
+  if (isSupabaseHost(url.hostname)) {
     if (url.pathname.startsWith("/storage/")) {
       event.respondWith(staleWhileRevalidate(CACHES.images, request, IMAGE_LIMIT));
       return;

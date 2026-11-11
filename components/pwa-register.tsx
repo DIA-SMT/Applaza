@@ -2,6 +2,15 @@
 
 import { useEffect } from "react";
 
+function apiQuery() {
+  try {
+    const origin = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").origin;
+    return `?api=${encodeURIComponent(origin)}`;
+  } catch {
+    return "";
+  }
+}
+
 export function PwaRegister() {
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
@@ -17,7 +26,9 @@ export function PwaRegister() {
       return;
     }
 
-    navigator.serviceWorker.register("/sw.js").catch(() => { /* sin soporte o bloqueado: la app sigue funcionando online */ });
+    // El service worker recibe el dominio de la API de Supabase (Cloud o propio) para saber
+    // qué datos y fotos guardar para usar sin conexión.
+    navigator.serviceWorker.register(`/sw.js${apiQuery()}`).catch(() => { /* sin soporte o bloqueado: la app sigue funcionando online */ });
   }, []);
   return null;
 }
