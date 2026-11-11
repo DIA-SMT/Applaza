@@ -6,11 +6,14 @@ import { AUTH_UNREACHABLE_HEADER, encodeVerifiedUser, VERIFIED_USER_HEADER } fro
 
 type CookieToSet = { name: string; value: string; options: CookieOptions };
 
-// Redirección con dirección relativa: detrás de un proxy (nginx en el VPS) Next arma request.url
-// con su nombre interno (localhost:3006), así que una dirección absoluta mandaría al usuario ahí.
-// La relativa la resuelve el navegador sobre el dominio real, y funciona igual en Vercel.
-function redirectTo(path: string) {
-  return new NextResponse(null, { status: 307, headers: { Location: path } });
+// Detrás de un proxy (nginx en el VPS) Next arma request.url con su nombre interno
+// (localhost:3006). La redirección se arma con el dominio real que informa el proxy
+// (X-Forwarded-Host/Proto, que también manda Vercel); si no viene, se usa request.url.
+function redirectTo(request: NextRequest, path: string) {
+  const first = (value: string | null) => value?.split(",")[0]?.trim() || null;
+  const host = first(request.headers.get("x-forwarded-host")) ?? first(request.headers.get("host"));
+  const proto = first(request.headers.get("x-forwarded-proto")) ?? request.nextUrl.protocol.replace(":", "");
+  return NextResponse.redirect(new URL(path, host ? `${proto}://${host}` : request.url));
 }
 
 export async function updateSession(request: NextRequest) {
@@ -49,8 +52,8 @@ export async function updateSession(request: NextRequest) {
   };
 
   const isLogin = request.nextUrl.pathname.startsWith("/login");
-  if (authState === "ok" && !user && !isLogin) return withCookies(redirectTo("/login"));
-  if (user && isLogin) return withCookies(redirectTo("/"));
+  if (authState === "ok" && !user && !isLogin) return withCookies(redirectTo(request, "/login"));
+  if (user && isLogin) return withCookies(redirectTo(request, "/"));
 
   if (cookiesToSet.length) requestHeaders.set("cookie", request.headers.get("cookie") ?? "");
   if (user) requestHeaders.set(VERIFIED_USER_HEADER, encodeVerifiedUser({ id: user.id, email: user.email }));
