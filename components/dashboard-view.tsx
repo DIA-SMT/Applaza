@@ -1,16 +1,15 @@
 "use client";
 
-import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight, Camera, Check, ChevronRight, ClipboardCheck, Eye, FileText, Home, Images, LayoutDashboard, LoaderCircle, LogOut, Map, MapPin, Menu, MessageSquarePlus, Route, Save, Search, Trees, TriangleAlert, UsersRound, X } from "lucide-react";
 import { CityLockup } from "./city-lockup";
 import { MascotaApplaza } from "./mascota-applaza";
+import { EvidenceCarousel, type CarouselPhoto } from "./evidence-carousel";
 import { ShowMoreButton, useShowMore } from "./show-more";
 import type { MaintenancePhoto, MaintenanceTask, Provider, SpaceRecord, UserProfile } from "@/types/domain";
 import { buildEstimatedDistanceReport, formatEstimatedKm, type EstimatedDistanceReport } from "@/lib/estimated-distance";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
 import { MSG_SERVICE_UNAVAILABLE } from "@/lib/user-messages";
-import { photoTypeLabel } from "@/lib/photo-label";
 import { AuditDashboard } from "./audit-dashboard";
 import { AssistantChat } from "./assistant-chat";
 import { ControlRegister } from "./control-register";
@@ -53,7 +52,7 @@ export function DashboardView({ initialSpaces, providers, currentUser, userProfi
     { key: "providers" as const, label: "Cooperativas activas", value: providers.filter((provider) => provider.active).length, icon: UsersRound, tone: "purple" },
   ];
   // Ordenadas por fecha de carga (si existe): una evidencia de un control pasado, recién cargada, aparece entre las últimas.
-  const latestPhotos = spaces.flatMap((space) => space.photos.map((photo) => ({ ...photo, spaceName: space.name }))).sort((left, right) => (right.uploaded_at ?? right.created_at).localeCompare(left.uploaded_at ?? left.created_at));
+  const latestPhotos = spaces.flatMap((space) => space.photos.map((photo) => ({ ...photo, spaceId: space.id, spaceName: space.name, neighborhood: space.neighborhood }))).sort((left, right) => (right.uploaded_at ?? right.created_at).localeCompare(left.uploaded_at ?? left.created_at));
 
   useEffect(() => {
     if (!mobileNavOpen) {
@@ -224,7 +223,7 @@ function Dashboard({
   currentUser: UserProfile;
   stats: Array<{ key: MetricKey; label: string; value: number | string; icon: typeof Trees; tone: string }>;
   distanceReport: EstimatedDistanceReport;
-  latestPhotos: Array<{ id: string; image_url: string; photo_type: string; spaceName: string }>;
+  latestPhotos: CarouselPhoto[];
   dataError: string | null;
   onPhoto: (photo: MaintenancePhoto, spaceId?: string, task?: MaintenanceTask) => void;
   onOpenMap: () => void;
@@ -285,6 +284,7 @@ function Dashboard({
         <Icon className="quick-ghost" aria-hidden="true" />
       </button>)}
     </nav>
+    <EvidenceCarousel photos={latestPhotos} onOpenSpace={setSelectedSpaceId} />
     <h2 className="section-heading">Accesos rápidos</h2>
     <div className="shortcut-row">
       {shortcuts.map(({ key, label, icon: Icon, onClick }) => <button key={key} className="shortcut-tile" onClick={onClick}><Icon aria-hidden="true" /><span>{label}</span></button>)}
@@ -297,7 +297,6 @@ function Dashboard({
       <section className="card"><div className="card-title"><div><h2>Espacios cargados</h2><p>Primeros registros disponibles del documento</p></div><button onClick={onOpenMap}>Ver mapa <ChevronRight size={16} /></button></div>{listedSpaces.length ? <div className="task-list">{listedSpaces.map((space) => <button key={space.id} onClick={onOpenMap}><span className="space-dot" /><div><strong>{space.name}</strong><small>{space.provider?.name || "Sin cooperativa asignada"}</small></div><span className="space-section-label">{space.section_code ? `Seccion ${space.section_code}` : space.source_type || "Espacio"}</span><ChevronRight size={17} /></button>)}</div> : <p className="dashboard-empty">No hay espacios cargados.</p>}</section>
       <section className="card evidence-card" id="cargar-evidencia"><div className="card-title"><div><h2>Cargar evidencia</h2><p>Foto tomada en campo y asociada al espacio verde</p></div><Camera size={20} /></div><PhotoUpload spaces={spaces} onUploaded={onPhoto} /></section>
       <SupervisorObservations spaces={spaces} currentUser={currentUser} />
-      <section className="card" id="ultimas-evidencias"><div className="card-title"><div><h2>Últimas evidencias</h2><p>Fotos cargadas recientemente</p></div><Camera size={20} /></div>{latestPhotos.length ? <div className="recent-photos">{latestPhotos.slice(0, 4).map((photo) => <figure key={photo.id}><Image src={photo.image_url} alt={photo.spaceName} width={320} height={180} unoptimized={photo.image_url.startsWith("blob:")} /><figcaption><strong>{photo.spaceName}</strong><span>{photoTypeLabel(photo.photo_type)}</span></figcaption></figure>)}</div> : <p className="dashboard-empty">No hay fotos cargadas.</p>}</section>
     </div>
     {selectedSpace && <SpaceDetail space={selectedSpace} providers={providers} currentUser={currentUser} onClose={() => setSelectedSpaceId(undefined)} onPhoto={(photo) => onPhoto(photo)} onUpdate={onUpdateSpace} onRelocate={onLocateSpace} />}
   </div>;

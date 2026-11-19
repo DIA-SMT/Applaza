@@ -11,7 +11,8 @@
     "fields:sql": "node scripts/build-field-corrections-sql.mjs",
     "photos:report": "node scripts/photo-storage-report.mjs",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "node --test \"tests/**/*.test.ts\""
   },
   "dependencies": {
     "@supabase/ssr": "^0.6.1",
