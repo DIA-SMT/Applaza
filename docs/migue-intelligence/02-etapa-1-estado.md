@@ -42,11 +42,14 @@ Correr los tests: `npm test` (28 tests, sin dependencias nuevas; usa `node:test`
 | `OPENROUTER_API_KEY` | ya existe en el VPS | Clave del proveedor |
 | `SUPABASE_SERVICE_ROLE_KEY`, `MIGUE_SUPABASE_URL` | en `/srv/applaza/compartido/migue.env` (solo lo lee el worker, no la web) | El worker escribe resultados y usa la cola |
 
-## Falta (en orden)
+## En producción (20/11/2026)
 
-1. **Publicar**: mergear la rama y desplegar (`/srv/applaza/desplegar.sh`), y sumar el proceso PM2 `applaza-migue` al `ecosystem.config.js`:
-   `node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --env-file=/srv/applaza/compartido/.env --env-file=/srv/applaza/compartido/migue.env scripts/migue-worker.ts` con `cwd` en `/srv/applaza/actual` y `max_memory_restart`.
-2. **Activar la rúbrica** (`update migue_rubrics set active = true where version = 'espacios-verdes-v1'`): desde ahí cada foto nueva se analiza sola.
-3. **Histórico**: `select migue_enqueue_backfill(100)` por tandas (~USD 0,80 cada 100 fotos).
-4. **Set de evaluación**: 50–100 fotos etiquetadas por personal municipal con la misma rúbrica, para medir acierto por aspecto y ajustar umbrales. Las revisiones (confirmar/corregir) de la app ya sirven como etiquetas.
-5. Etapa 2: comparación entre controles del mismo espacio e historial.
+- **Rúbrica activa: `espacios-verdes-v2`** con el prompt `foto-v4`. La evaluación está en `03-evaluacion-rubrica-v2.md`. Cada foto nueva se encola sola y se analiza en uno o dos minutos.
+- **Worker:** proceso PM2 `applaza-migue` del usuario applaza, con tope de 250 MB. Registro en `/srv/applaza/registros/migue-*.log`. `desplegar.sh` lo reinicia en cada publicación.
+- **Prueba de punta a punta:** las 5 fotos analizadas con la v1 se volvieron a analizar con la v2, en unos 6 s y USD 0,008 cada una.
+
+## Falta
+
+1. **Histórico:** `select migue_enqueue_backfill(100)` por tandas, unos USD 0,80 cada 100 fotos (~USD 8 las 994). Requiere decisión.
+2. **Set de evaluación:** usar las revisiones del equipo (Confirmar / Corregir / Rechazar) para medir con 50 a 100 fotos y ajustar umbrales.
+3. **Etapa 2:** comparación entre controles del mismo espacio e historial.

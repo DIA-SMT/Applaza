@@ -49,12 +49,15 @@ export function deriveStatus(output: ModelPhotoOutput, rubric: Rubric): StatusDe
   const attention: string[] = [];
 
   // Lo que se ve solo en parte suma al promedio y queda a la vista, pero no cambia el estado por
-  // sí solo: un detalle visto de lejos no alcanza para levantar una alerta.
+  // sí solo: un detalle visto de lejos no alcanza para levantar una alerta. Eso vale solo si hay
+  // suficientes aspectos vistos con claridad que respalden el estado; si no, lo parcial cuenta.
+  const clearCount = counted.filter((d) => d.visibility !== "parcial").length;
+  const discountPartial = clearCount >= rubric.minEvaluatedDimensions;
   const partial: string[] = [];
   for (const d of counted) {
     const score = d.score as number;
     if (score >= rubric.thresholds.attention) continue;
-    if (d.visibility === "parcial") {
+    if (d.visibility === "parcial" && discountPartial) {
       partial.push(`${label(d.dimension)}: ${score}/100, pero se ve solo en parte (no cambia el estado; conviene revisarlo).`);
     } else if (score < rubric.thresholds.critical) critical.push(`${label(d.dimension)}: ${score}/100 (bajo ${rubric.thresholds.critical}).`);
     else attention.push(`${label(d.dimension)}: ${score}/100 (bajo ${rubric.thresholds.attention}).`);
