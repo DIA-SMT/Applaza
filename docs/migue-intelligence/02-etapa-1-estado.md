@@ -44,12 +44,12 @@ Correr los tests: `npm test` (28 tests, sin dependencias nuevas; usa `node:test`
 
 ## En producción (20/11/2026)
 
-- **Rúbrica activa: ** con el prompt . La evaluación está en . Cada foto nueva se encola sola y se analiza en uno o dos minutos.
-- **Worker:** proceso PM2  del usuario applaza, con tope de 250 MB. Registro en .  lo reinicia en cada publicación.
+- **Rúbrica activa: `espacios-verdes-v2`** con el prompt `foto-v4`. La evaluación está en `03-evaluacion-rubrica-v2.md`. Cada foto nueva se encola sola y se analiza en uno o dos minutos.
+- **Worker:** proceso PM2 `applaza-migue` del usuario applaza, con tope de 250 MB. Registro en `/srv/applaza/registros/migue-*.log`. `desplegar.sh` lo reinicia en cada publicación.
 - **Prueba de punta a punta:** las 5 fotos analizadas con la v1 se volvieron a analizar con la v2, en unos 6 s y USD 0,008 cada una.
 
 ## Falta
 
-1. **Histórico:**  por tandas, unos USD 0,80 cada 100 fotos (~USD 8 las 994). Requiere decisión.
+1. **Histórico:** `select migue_enqueue_backfill(100)` por tandas, unos USD 0,80 cada 100 fotos (~USD 8 las 994). Requiere decisión.
 2. **Set de evaluación:** usar las revisiones del equipo (Confirmar / Corregir / Rechazar) para medir con 50 a 100 fotos y ajustar umbrales.
 3. **Etapa 2:** comparación entre controles del mismo espacio e historial.
