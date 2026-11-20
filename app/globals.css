@@ -614,3 +614,4 @@ button:focus-visible,a:focus-visible,summary:focus-visible{outline:3px solid var
 @media (max-width:760px){.evidence-showcase{margin-bottom:24px}.evidence-showcase-head .section-heading{font-size:19px}.evidence-card-slide{width:220px;height:144px;margin-right:10px}}
 @media (prefers-reduced-motion:reduce){.evidence-card-slide{transition:none}}
 @media(min-width:1051px){.dashboard-grid>.summary-observations-card:last-child{grid-column:1 / -1}}
+.migue-season-note{margin:0 0 6px!important;font-size:11px;color:#475569;background:#fff;border-left:3px solid var(--brand-yellow);border-radius:6px;padding:5px 9px}

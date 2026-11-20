@@ -92,7 +92,7 @@ export class OpenRouterVisionProvider implements VisionProvider {
               role: "user",
               content: [
                 { type: "text", text: buildUserPrompt(input) },
-                { type: "image_url", image_url: { url: image } },
+                { type: "image_url", image_url: { url: image, detail: "high" } },
               ],
             },
           ],
@@ -151,6 +151,7 @@ export class TestVisionProvider implements VisionProvider {
       const evaluable = pick(4) !== 0;
       return {
         dimension: d.key,
+        visibility: evaluable ? "clara" : "no_visible",
         evaluable,
         score: evaluable ? 35 + pick(66) : null,
         confidence: evaluable ? 0.5 + pick(50) / 100 : 0.2,
@@ -160,6 +161,7 @@ export class TestVisionProvider implements VisionProvider {
     const output = {
       evidence_quality: { level: pick(8) === 0 ? "insuficiente" : "buena", issues: [] },
       scene_summary: "[MODO PRUEBA] Resultado simulado: no proviene del análisis de la foto.",
+      season_light_note: null,
       dimensions,
       findings: [],
       recommendations: [],

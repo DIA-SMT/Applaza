@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Check, ChevronDown, LoaderCircle, PencilLine, X } from "lucide-react";
 import type { ModelPhotoOutput, SuggestedStatus } from "@/lib/migue-vision/contracts.ts";
-import { RUBRIC_V1 } from "@/lib/migue-vision/rubric-v1.ts";
+import { CURRENT_RUBRIC } from "@/lib/migue-vision/rubric.ts";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
 import { userErrorMessage } from "@/lib/user-messages";
 import type { UserProfile } from "@/types/domain";
@@ -21,7 +21,7 @@ export const STATUS_LABEL: Record<SuggestedStatus, string> = {
 const KIND_LABEL = { observado: "Se observa", posible_problema: "Posible problema", no_determinable: "No determinable" } as const;
 const SEVERITY_LABEL = { baja: "leve", media: "moderado", alta: "grave" } as const;
 const DECISION_LABEL = { confirmado: "Confirmado", corregido: "Corregido", rechazado: "Rechazado" } as const;
-const DIMENSION_LABEL = new Map(RUBRIC_V1.dimensions.map((d) => [d.key, d.label]));
+const DIMENSION_LABEL = new Map(CURRENT_RUBRIC.dimensions.map((d) => [d.key, d.label]));
 
 type Decision = keyof typeof DECISION_LABEL;
 interface Review { id: string; decision: Decision; corrected_status: SuggestedStatus | null; comment: string; reviewed_by: string; created_at: string }
@@ -127,6 +127,7 @@ export function MiguePhotoAnalysis({ photoId, currentUser }: { photoId: string; 
 
     <div className="migue-analysis-summary">
       <p>{output.scene_summary}</p>
+      {output.season_light_note && <p className="migue-season-note">No cuenta como falta: {output.season_light_note}</p>}
       <div className="migue-analysis-figures">
         <span><b>{analysis.overall_score ?? "—"}</b>/100</span>
         <span>{analysis.coverage_evaluated} de {analysis.coverage_total} aspectos evaluados</span>
@@ -144,7 +145,7 @@ export function MiguePhotoAnalysis({ photoId, currentUser }: { photoId: string; 
     {open && <div className="migue-analysis-detail">
       <ul className="migue-dimensions">
         {output.dimensions.map((d) => <li key={d.dimension} className={d.evaluable ? "" : "is-off"}>
-          <div><strong>{DIMENSION_LABEL.get(d.dimension) ?? d.dimension}</strong><span>{d.evaluable ? `${d.score}/100` : "No evaluable"}</span></div>
+          <div><strong>{DIMENSION_LABEL.get(d.dimension) ?? d.dimension}</strong><span>{d.evaluable ? `${d.score}/100${d.visibility === "parcial" ? " · se ve parcial" : ""}` : "No evaluable"}</span></div>
           {d.evaluable && <meter min={0} max={100} low={40} high={70} optimum={100} value={d.score ?? 0} />}
           <p>{d.evidence}</p>
         </li>)}

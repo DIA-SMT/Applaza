@@ -7,6 +7,7 @@ import type {
   ModelPhotoOutput,
   Rubric,
   Severity,
+  Visibility,
 } from "./contracts.ts";
 
 // Validación estricta de la respuesta del modelo. Lo que no cumple el contrato se rechaza (no se
@@ -17,6 +18,7 @@ const EVIDENCE_LEVELS: EvidenceLevel[] = ["buena", "aceptable", "insuficiente"];
 const EVIDENCE_ISSUES: EvidenceIssue[] = ["borrosa", "oscura", "sobreexpuesta", "encuadre_parcial", "obstruida", "lejana", "no_es_espacio_verde"];
 const FINDING_KINDS: FindingKind[] = ["observado", "posible_problema", "no_determinable"];
 const SEVERITIES: Severity[] = ["baja", "media", "alta"];
+const VISIBILITIES: Visibility[] = ["clara", "parcial", "no_visible"];
 
 const MAX_TEXT = 400;
 const MAX_FINDINGS = 20;
@@ -80,7 +82,9 @@ function dimensions(c: Collector, value: unknown, rubric: Rubric): DimensionAsse
     if (typeof key !== "string" || !known.has(key)) return c.fail(`${path}.dimension`, `dimensión desconocida: ${String(key)}`);
     if (seen.has(key)) return c.fail(`${path}.dimension`, `dimensión repetida: ${key}`);
 
+    const visibility = oneOf(c, item.visibility, VISIBILITIES, `${path}.visibility`);
     const evaluable = bool(c, item.evaluable, `${path}.evaluable`);
+    if (visibility === "no_visible" && evaluable) c.fail(`${path}.evaluable`, "no puede ser evaluable algo que no se ve");
     let score: number | null = null;
     if (evaluable) {
       if (typeof item.score !== "number" || !Number.isInteger(item.score) || item.score < 0 || item.score > 100) {
@@ -92,6 +96,7 @@ function dimensions(c: Collector, value: unknown, rubric: Rubric): DimensionAsse
 
     seen.set(key, {
       dimension: key,
+      visibility,
       evaluable,
       score,
       confidence: confidence(c, item.confidence, `${path}.confidence`),
@@ -103,7 +108,7 @@ function dimensions(c: Collector, value: unknown, rubric: Rubric): DimensionAsse
     const found = seen.get(d.key);
     if (found) return found;
     c.warnings.push(`El modelo no evaluó "${d.label}"; queda como no evaluable.`);
-    return { dimension: d.key, evaluable: false, score: null, confidence: 0, evidence: "Sin evaluación del modelo." };
+    return { dimension: d.key, visibility: "no_visible", evaluable: false, score: null, confidence: 0, evidence: "Sin evaluación del modelo." };
   });
 }
 
@@ -150,6 +155,7 @@ export function validateModelOutput(raw: unknown, rubric: Rubric): ValidationRes
       issues: [...new Set(issues.map((issue, i) => oneOf(c, issue, EVIDENCE_ISSUES, `evidence_quality.issues[${i}]`)))],
     },
     scene_summary: text(c, raw.scene_summary, "scene_summary"),
+    season_light_note: raw.season_light_note === null || raw.season_light_note === undefined ? null : text(c, raw.season_light_note, "season_light_note", { allowEmpty: true }) || null,
     dimensions: dimensions(c, raw.dimensions, rubric),
     findings: findings(c, raw.findings, rubric),
     recommendations: recommendations.slice(0, MAX_RECOMMENDATIONS).map((r, i) => text(c, r, `recommendations[${i}]`)),
