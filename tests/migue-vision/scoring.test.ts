@@ -73,3 +73,19 @@ describe("deriveStatus", () => {
     assert.equal(deriveStatus(output, RUBRIC_V1).overall_score, 84);
   });
 });
+
+describe("deriveStatus con visibilidad parcial", () => {
+  it("un aspecto bajo que se ve solo en parte no cambia el estado, pero queda en los motivos", () => {
+    const output = goodOutput();
+    output.dimensions[2] = { ...output.dimensions[2], score: 50, visibility: "parcial" };
+    const result = deriveStatus(output, RUBRIC_V1);
+    assert.equal(result.status, "satisfactorio");
+    assert.ok(result.reasons.some((r) => r.includes("se ve solo en parte")));
+  });
+
+  it("el mismo puntaje visto con claridad sí pide atención", () => {
+    const output = goodOutput();
+    output.dimensions[2] = { ...output.dimensions[2], score: 50, visibility: "clara" };
+    assert.equal(deriveStatus(output, RUBRIC_V1).status, "requiere_atencion");
+  });
+});

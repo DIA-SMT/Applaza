@@ -18,7 +18,7 @@ import { hostname } from "node:os";
 import { analyzePhoto } from "../lib/migue-vision/analyze.ts";
 import type { PhotoAnalysisInput, Rubric } from "../lib/migue-vision/contracts.ts";
 import { getVisionProvider } from "../lib/migue-vision/provider.ts";
-import { RUBRIC_V1 } from "../lib/migue-vision/rubric-v1.ts";
+import { CURRENT_RUBRIC } from "../lib/migue-vision/rubric.ts";
 
 const IDLE_MS = 20_000;
 const BETWEEN_JOBS_MS = 1_000;
@@ -74,13 +74,13 @@ function canonical(value: unknown): string {
 
 /** Registra la rúbrica del código si todavía no está en la base (inactiva: activarla es una decisión aparte). */
 async function registerCodeRubric() {
-  const { data } = await db.from("migue_rubrics").select("definition").eq("version", RUBRIC_V1.version).maybeSingle();
+  const { data } = await db.from("migue_rubrics").select("definition").eq("version", CURRENT_RUBRIC.version).maybeSingle();
   if (!data) {
-    const { error } = await db.from("migue_rubrics").insert({ version: RUBRIC_V1.version, name: RUBRIC_V1.name, definition: RUBRIC_V1, active: false });
+    const { error } = await db.from("migue_rubrics").insert({ version: CURRENT_RUBRIC.version, name: CURRENT_RUBRIC.name, definition: CURRENT_RUBRIC, active: false });
     if (error) throw new Error(`No se pudo registrar la rúbrica: ${error.message}`);
-    log(`Rúbrica ${RUBRIC_V1.version} registrada (inactiva).`);
-  } else if (canonical(data.definition) !== canonical(RUBRIC_V1)) {
-    log(`AVISO: la rúbrica ${RUBRIC_V1.version} de la base no coincide con la del código. Se usa la de la base; para cambiarla hay que crear una versión nueva.`);
+    log(`Rúbrica ${CURRENT_RUBRIC.version} registrada (inactiva).`);
+  } else if (canonical(data.definition) !== canonical(CURRENT_RUBRIC)) {
+    log(`AVISO: la rúbrica ${CURRENT_RUBRIC.version} de la base no coincide con la del código. Se usa la de la base; para cambiarla hay que crear una versión nueva.`);
   }
 }
 

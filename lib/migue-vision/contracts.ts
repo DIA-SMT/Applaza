@@ -8,6 +8,8 @@ export type Severity = "baja" | "media" | "alta";
 export type EvidenceLevel = "buena" | "aceptable" | "insuficiente";
 export type EvidenceIssue = "borrosa" | "oscura" | "sobreexpuesta" | "encuadre_parcial" | "obstruida" | "lejana" | "no_es_espacio_verde";
 export type AnalysisMode = "real" | "prueba";
+/** Qué tan bien se ve en la foto lo que hay que evaluar. Lo lejano o tapado no se puntúa. */
+export type Visibility = "clara" | "parcial" | "no_visible";
 
 export interface RubricDimension {
   key: string;
@@ -16,6 +18,8 @@ export interface RubricDimension {
   guidance: string;
   /** Peso en el promedio (solo entre dimensiones evaluadas). */
   weight: number;
+  /** Cómo se ve cada nivel de puntaje (de mayor a menor). Ancla la escala para que no sea siempre 80-90. */
+  levels?: { from: number; text: string }[];
 }
 
 export interface Rubric {
@@ -36,6 +40,8 @@ export interface Rubric {
 
 export interface DimensionAssessment {
   dimension: string;
+  /** Opcional en análisis anteriores a la rúbrica v2. */
+  visibility?: Visibility;
   evaluable: boolean;
   /** 0-100, solo si evaluable. */
   score: number | null;
@@ -59,6 +65,8 @@ export interface Finding {
 export interface ModelPhotoOutput {
   evidence_quality: { level: EvidenceLevel; issues: EvidenceIssue[] };
   scene_summary: string;
+  /** Efectos de estación, clima o luz que NO son falta de mantenimiento (p. ej. árboles sin hojas en invierno). */
+  season_light_note?: string | null;
   dimensions: DimensionAssessment[];
   findings: Finding[];
   recommendations: string[];

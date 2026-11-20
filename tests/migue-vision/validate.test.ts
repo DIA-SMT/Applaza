@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { RUBRIC_V1 } from "../../lib/migue-vision/rubric-v1.ts";
+import { RUBRIC_V2 } from "../../lib/migue-vision/rubric-v2.ts";
+import { buildSystemPrompt } from "../../lib/migue-vision/prompt.ts";
 import { parseJsonContent, validateModelOutput } from "../../lib/migue-vision/validate.ts";
 import { goodOutput } from "./fixtures.ts";
 
@@ -88,5 +90,35 @@ describe("parseJsonContent", () => {
   });
   it("falla con texto que no es JSON", () => {
     assert.throws(() => parseJsonContent("La plaza está bien."));
+  });
+});
+
+describe("rúbrica v2: visibilidad y nota estacional", () => {
+  it("rechaza puntuar algo marcado como no visible", () => {
+    const output = goodOutput();
+    output.dimensions[0] = { ...output.dimensions[0], visibility: "no_visible" };
+    assert.equal(validateModelOutput(output, RUBRIC_V2).ok, false);
+  });
+
+  it("exige indicar la visibilidad", () => {
+    const output = goodOutput() as unknown as { dimensions: Record<string, unknown>[] };
+    delete output.dimensions[0].visibility;
+    assert.equal(validateModelOutput(output, RUBRIC_V2).ok, false);
+  });
+
+  it("acepta una dimensión no visible sin puntaje y conserva la nota estacional", () => {
+    const output = goodOutput();
+    output.season_light_note = "Árboles sin hojas por el invierno.";
+    output.dimensions[6] = { ...output.dimensions[6], visibility: "no_visible", evaluable: false, score: null };
+    const result = validateModelOutput(output, RUBRIC_V2);
+    assert.equal(result.ok, true);
+    if (result.ok) assert.equal(result.value.season_light_note, "Árboles sin hojas por el invierno.");
+  });
+
+  it("el prompt incluye la escala de cada dimensión y la regla de visibilidad", () => {
+    const prompt = buildSystemPrompt(RUBRIC_V2);
+    for (const d of RUBRIC_V2.dimensions) assert.ok(prompt.includes(`- ${d.key} (`), d.key);
+    assert.ok(prompt.includes("Escala: 90+ corto, parejo"));
+    assert.ok(prompt.includes('"no_visible"'));
   });
 });
