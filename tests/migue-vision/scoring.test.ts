@@ -89,3 +89,16 @@ describe("deriveStatus con visibilidad parcial", () => {
     assert.equal(deriveStatus(output, RUBRIC_V1).status, "requiere_atencion");
   });
 });
+
+describe("deriveStatus con pocos aspectos claros", () => {
+  it("si casi nada se ve con claridad, un aspecto parcial bajo sí pide atención", () => {
+    const output = goodOutput();
+    output.dimensions = output.dimensions.map((d, i) => {
+      if (i === 0) return { ...d, score: 50, visibility: "parcial" as const };
+      if (i === 1) return d;
+      if (i === 2) return { ...d, score: 70, visibility: "parcial" as const };
+      return { ...d, visibility: "no_visible" as const, evaluable: false, score: null };
+    });
+    assert.equal(deriveStatus(output, RUBRIC_V1).status, "requiere_atencion");
+  });
+});
